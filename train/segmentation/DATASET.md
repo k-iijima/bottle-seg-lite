@@ -68,7 +68,7 @@
 ## 5. 属性スキーマ（10種）
 
 Qwen3-VL の VQA で bottle crop ごとに付与。各属性に `unknown` あり。
-定義は [attribute_pipeline.py](attribute_pipeline.py) の `VLM_QUESTIONS`、CVAT 用は [cvat_labels.json](cvat_labels.json)。
+定義は [attribute_pipeline.py](attribute_pipeline.py) の `VLM_QUESTIONS`、CVAT 用は [cvat_labels_parts.json](cvat_labels_parts.json)。
 
 | 属性 | 値 |
 |---|---|

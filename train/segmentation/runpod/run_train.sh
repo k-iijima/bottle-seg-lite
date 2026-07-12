@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pod 上で RTMDet-Ins-s の学習 → test 評価 → 成果物 tar 化まで行う。
-#   GPUS=8 bash run_train.sh                      # 8GPU DDP（lr は公式値 0.004 に自動切替）
+#   GPUS=8 bash run_train.sh                      # 8GPU DDP（lr は実績値 2.5e-4 を自動設定）
 #   GPUS=8 bash run_train.sh --smoke              # 1 epoch だけ回して配線確認
 #   GPUS=8 bash run_train.sh visualizer.vis_backends.1.run_name=h100x8_60e
 # --smoke 以外の引数は --cfg-options の key=val として渡る。
@@ -37,9 +37,11 @@ for a in "$@"; do
   fi
 done
 # lr 未指定時のみ自動設定。COCO 事前学習からのファインチューンでは from-scratch 公式値
-# (0.004@256) は高すぎて発散する（8GPU 実測: ep5 で mAP 0.011→0.001）→ 1/4 に抑える
+# (0.004@256) はもちろん、その 1/4 の 0.001@8GPU でも train loss が正常なまま val が崩壊
+# （SyncBN running 統計が追従不能。TRAINING_LOG.md §4 参照）
+# → 実績値 2.5e-4@8GPU（公式値の 1/16）を線形スケールで既定にする
 if ! printf '%s\n' "${CFGOPTS[@]}" | grep -q 'optimizer\.lr='; then
-  CFGOPTS+=(optim_wrapper.optimizer.lr=$(python -c "print(0.001 * 32 * $GPUS / 256)"))
+  CFGOPTS+=(optim_wrapper.optimizer.lr=$(python -c "print(0.00025 * 32 * $GPUS / 256)"))
 fi
 ARGS=(--amp --work-dir "$WORK")
 [ ${#CFGOPTS[@]} -gt 0 ] && ARGS+=(--cfg-options "${CFGOPTS[@]}")

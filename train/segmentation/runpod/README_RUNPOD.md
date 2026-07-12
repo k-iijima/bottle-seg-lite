@@ -79,6 +79,10 @@ scp -i runpod/.rp/id_rsa -P <PORT> root@<IP>:/workspace/train_outputs.tar.gz run
 
 # （既存）属性自動付与（material + cap/label）
 
+> ⚠️ **歴史的手順**（実行済み・通常は再実行不要）。当時は9属性・`_sam3attr` 出力だったが、
+> 現在は10属性（[../DATASET.md](../DATASET.md) §5）で `_sam3full` に統合済み。
+> 再実行する場合は suffix・属性数を現状に合わせて読み替えること。
+
 ローカル(8GB)では VLM が遅いので、cap/label を含む属性付与は RunPod の大きい GPU で実行する。
 **画像は戻さず、戻りは属性付き JSON だけ**（数MB）なので軽い。
 
@@ -185,7 +189,7 @@ tar xzf attr_outputs.tar.gz        # instances_*_sam3attr.json が annotations/ 
 docker compose --profile tools run --rm seg \
   python export_coco_for_cvat.py --splits test --suffix _sam3attr --only-source sam3_text sam3
 ```
-CVAT の Project ラベルは [../cvat_labels.json](../cvat_labels.json)（material/cap/label 定義済み）を Raw に貼る。
+CVAT の Project ラベルは [../cvat_labels_parts.json](../cvat_labels_parts.json)（bottle/cap/label + 10属性定義済み。旧 cvat_labels.json は削除済み）を Raw に貼る。
 
 ## 属性は9種（`--attrs` で選択可）
 material / cap / cap_color / label / label_color / fill_level / crushed / visibility / orientation

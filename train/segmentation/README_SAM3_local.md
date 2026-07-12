@@ -112,7 +112,9 @@ docker compose --profile tools run --rm seg python add_text_detections.py       
 ```
 
 出力: `instances_*_sam3merge.json`（= 既存温存 + 新規）, QA: `qa_sam3/merge/`（橙=既存, 緑=新規）。
-実績: 36,270 → **58,568 anns**（+22,298, score中央値0.57）。RTMDet-Ins では `_sam3merge` を ann_file に指定。
+実績: 36,270 → **58,568 anns**（+22,298, score中央値0.57）。
+（注: `_sam3merge` は 2026-07-11 に `_sam3full` へ統合・削除済み。学習には後述の
+`instances_*_trainready.json` を使う）
 
 再生成したアノテーションには `"seg_source": "sam3"` が付きます（温存分には付きません）。
 

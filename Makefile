@@ -30,7 +30,7 @@ cvat-superuser:     # 初回のみ: 管理ユーザー作成
 cvat-export:        # COCO -> CVAT インポート zip（全 split, _sam3merge）を生成
 	docker compose --profile tools run --rm seg python export_coco_for_cvat.py
 
-# Start the Flutter web dev server at http://localhost:8080
+# Start the Flutter web dev server at http://localhost:8081 (host 8081 -> container 8080)
 # (要 app/assets/models/rtmdet_ins.onnx — README「学習済みモデル」参照)
 up:
 	docker compose up --build web

@@ -17,5 +17,5 @@ fi
 echo "[entrypoint] flutter pub get..."
 flutter pub get
 
-echo "[entrypoint] starting dev server on http://localhost:8080"
+echo "[entrypoint] starting dev server on container port 8080 (host: http://localhost:8081)"
 exec flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080

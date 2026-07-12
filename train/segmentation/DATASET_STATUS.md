@@ -29,7 +29,7 @@
 | **`_sam3full`** | **正式アノテ（唯一）: 3クラスマスク + bottle 10属性** | [merge_parts_attrs.py](merge_parts_attrs.py) で `_sam3parts` + `_sam3attr` を統合（2026-07-11） | **全21,612枚** |
 | `instances_*.json`（接尾辞なし）/ `_coco/_lvis/_taco` | ソース生 bbox | 各データセット由来 | provenance |
 
-**今後の学習・CVAT補正は `_sam3full` を正とする**（bottle 120,313 / cap 29,535 / label 33,094、
+**今後の学習・CVAT補正は `_sam3full` を正とする**（bottle 120,244 / cap 29,253 / label 32,822、
 属性付き bottle 44,305）。属性は bottle アノテーションのみに持ち、cap/label は
 `parent_bottle_id` で親を参照する（cap_color 等の複製による食い違いを防ぐため）。
 
