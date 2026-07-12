@@ -14,8 +14,9 @@ import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 ///   masks  : float32 [1, K, S, S]  インスタンスマスク（0..1）
 class Detector {
   // scoreThreshold の下限は ONNX 側の内部閾値（export_rtmdet.sh の SCORE_THR=0.25）。
-  // それ未満に下げたい場合は再エクスポートが必要。
-  Detector({this.inputSize = 320, this.scoreThreshold = 0.25});
+  // それ未満に下げたい場合は再エクスポートが必要。上げる分にはここだけでよい
+  // （0.40 は誤検知抑制のための実運用値）。
+  Detector({this.inputSize = 320, this.scoreThreshold = 0.40});
 
   /// モデル入力解像度（エクスポート時の SIZE と一致させること）。
   final int inputSize;
