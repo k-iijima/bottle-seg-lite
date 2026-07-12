@@ -148,7 +148,9 @@ docker compose up --build web                    # = make up
   ステータスチップ左端に実行中モードを常時表示（例: `fp32/WebNN`、
   フォールバック時は `fp32/GPU→CPU×8`）。
 
-Android は NNAPI（fp16 許可）→ XNNPACK（4 スレッド）→ CPU の優先割り当て。
+Android は CPU EP（4 スレッド）。NNAPI / XNNPACK はこのモデル
+（uint8 NHWC 入力+動的 shape 後処理）でセッション作成中に SIGABRT する
+組み合わせ問題があり不使用（detector.dart のコメント参照）。
 
 さらに下げたい場合は入力解像度を落として再エクスポート
 （`export_rtmdet.sh` の `SIZE` と `Detector(inputSize:)` を一致させる）。
