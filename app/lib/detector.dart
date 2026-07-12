@@ -118,13 +118,13 @@ class Detector {
       );
       _session = await ort.createSession('assets/$modelAsset', options: options);
     } else {
-      // Android: NNAPI（GPU/DSP/NPU へ委譲、fp16 実行許可はプラグイン側で設定）
-      // → XNNPACK（SIMD 最適化 CPU）→ CPU の優先順。NNAPI が扱えない op
-      // （NMS 等の後処理）は自動的に後続プロバイダへ割り当てられる。
+      // Android: CPU EP（4 スレッド）。
+      // NNAPI / XNNPACK はこのモデル（uint8 NHWC 入力+NMS 以降の動的 shape）
+      // でセッション作成中に SIGABRT する（実機 Snapdragon で確認、
+      // クラッシュ位置は両者同一= XNNPACK EP 由来）。NPU/加速が必要なら
+      // QNN EP か tflite 変換を別途検討。
       final options = OrtSessionOptions(
-        providers: preferGpu
-            ? [OrtProvider.NNAPI, OrtProvider.XNNPACK, OrtProvider.CPU]
-            : [OrtProvider.XNNPACK, OrtProvider.CPU],
+        providers: [OrtProvider.CPU],
         intraOpNumThreads: 4,
       );
       _session = await ort.createSessionFromAsset(modelAsset, options: options);
