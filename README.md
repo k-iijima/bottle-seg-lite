@@ -4,6 +4,9 @@
 **Flutter（Web / Android）** アプリと、その自作モデル（RTMDet-Ins-s、bottle/cap/label 3クラス）の
 **データセット作成〜学習〜ONNX 化パイプライン**一式です。開発は Docker で完結します。
 
+**🌐 ライブデモ: https://k-iijima.github.io/bottle-seg-lite/** （カメラ許可が必要。
+main への push で GitHub Actions が自動ビルド・デプロイします）
+
 - **映像をとめない**: カメラ映像はネイティブ層で再生され、Dart/Flutter とは独立して描画されます。
   推論は非同期ループで動き、前フレームの推論が終わるまで新しいフレームは**スキップ**されるため、
   プレビューがモデルを待つことはありません。
@@ -35,7 +38,7 @@ bottle-seg-lite/
 
 pet_bottle データセット（21,612枚 / COCO+LVIS+TACO+YouTube CC、SAM3 による 3クラスマスク +
 Qwen3-VL による bottle 属性10種）の作成と、RTMDet-Ins-s の学習（test segm_mAP 0.352）。
-データセット本体・学習成果物は git 管理外（ローカル/クラウドのみ）。
+データセット本体・学習成果物は git 管理外。
 
 - データセット仕様: [train/segmentation/DATASET.md](train/segmentation/DATASET.md)
 - 作業ログ・経緯: [train/segmentation/DATASET_STATUS.md](train/segmentation/DATASET_STATUS.md)
