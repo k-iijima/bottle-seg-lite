@@ -120,6 +120,19 @@ GPUS=8 bash run_train.sh visualizer.vis_backends.1.run_name=<run名>
   (ONNX は検出器と同じ uint8 NHWC RGBA [1,128,128,4] 入力埋め込み、出力 logits [1,41]。
   ORT 検算済み max diff ~5e-3)
 - 次: アプリ統合(トラック単位の非同期推論+時間集約)、fill_level/material の教師見直し
+- 課題(2026-07-12): **絵・画面上のボトルを「実物」と誤判定しがち**
+  （[#1](https://github.com/k-iijima/bottle-seg-lite/issues/1)）。
+  - 原因: ①depicted が学習データの 6.4%(2,829/44,305)しかなく real 事前が強い
+    (sqrt逆頻度重みでは緩和しきれない) ②「紙・画面上の絵にカメラを向ける=再撮影」
+    ドメインが学習分布外(学習の depicted は写真内に写り込んだ印刷・画面のみ)
+    ③クロップ bbox+15% pad で紙縁・ベゼル等の文脈が落ち、128px 縮小でモアレ・
+    網点等の微細手掛かりも消える。depiction F1 .865 は同分布・対疑似ラベルの
+    値であり、再撮影ドメインの精度は未測定。
+  - 対策案(見積 計2〜3h): ①学習クロップへの再撮影シミュレーション拡張
+    (モアレ/グレア/ホモグラフィ/彩度シフト合成で depicted サンプルを増強)→
+    fine-tune ②アプリ側 depiction ヘッドの非対称閾値(「実物」表示に
+    p(real)>=0.8 を要求。attr_classifier.dart thresholdFor / overlay_paint.dart)。
+    ②のみなら10分で入るが本物側の `?` 表示が増えるトレードオフあり。
 
 ### 8b. MobileNetV4 比較(2026-07-12、2×H100 ~15分)
 
