@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""pet_bottle の COCO データセットを CVAT インポート用 zip に変換する。
+"""bottle の COCO データセットを CVAT インポート用 zip に変換する。
 
 VSLAM の segmentation/export_coco_for_cvat.py を、本リポジトリのレイアウトに合わせて
 調整したもの。差分:
@@ -20,7 +20,7 @@ CVAT 取り込みの肝（datumaro COCO importer 準拠）:
 使い方:
   python export_coco_for_cvat.py --splits val test
   python export_coco_for_cvat.py --splits all --subset review_multicap \
-      --image-list datasets/pet_bottle/qa_sam3full/review_multicap_images.txt
+      --image-list datasets/bottle/qa_sam3full/review_multicap_images.txt
 （パスに非ASCIIを含む環境で問題が出る場合は seg コンテナ内で実行:
   docker compose --profile tools run --rm seg python export_coco_for_cvat.py ...）
 """
@@ -33,7 +33,7 @@ import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DATASET_ROOT = HERE / "datasets" / "pet_bottle"
+DATASET_ROOT = HERE / "datasets" / "bottle"
 CVAT_IMAGE_DIR = "images"
 
 
@@ -128,7 +128,7 @@ def build_cvat_zip(dataset_root: Path, split: str, ann_path: Path,
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="pet_bottle COCO -> CVAT インポート zip")
+    ap = argparse.ArgumentParser(description="bottle COCO -> CVAT インポート zip")
     ap.add_argument("--dataset-root", type=Path, default=DATASET_ROOT)
     ap.add_argument("--suffix", default="_sam3full",
                     help="読むアノテ: instances_<split><suffix>.json（既定 _sam3full）")

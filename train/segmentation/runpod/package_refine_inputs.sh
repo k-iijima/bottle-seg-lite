@@ -7,8 +7,8 @@ cd /work
 mkdir -p runpod
 tar cf runpod/refine_inputs.tar \
   -C /work/datasets \
-    pet_bottle/images/all \
-    pet_bottle/annotations/instances_all_sam3full.json \
+    bottle/images/all \
+    bottle/annotations/instances_all_sam3full.json \
   -C /work \
     refine_masks.py runpod/setup_refine.sh
 echo "[package] created runpod/refine_inputs.tar"

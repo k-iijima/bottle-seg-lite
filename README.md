@@ -34,7 +34,7 @@ bottle-seg-lite/
 
 ## 学習パイプライン（train/segmentation/）
 
-pet_bottle データセット（21,612枚 / COCO+LVIS+TACO+YouTube CC、SAM3 による 3クラスマスク +
+bottle データセット（21,612枚 / COCO+LVIS+TACO+YouTube CC、SAM3 による 3クラスマスク +
 Qwen3-VL による bottle 属性10種）の作成と、RTMDet-Ins-s の学習（test segm_mAP 0.352。
 評価の正解も SAM3 生成アノテーションのため、この値は人手正解に対する精度ではなく
 **SAM3 疑似ラベルの再現度**）。

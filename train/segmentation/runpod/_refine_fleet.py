@@ -32,7 +32,7 @@ IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 GPUS = ["NVIDIA H100 80GB HBM3", "NVIDIA H100 PCIe",
         "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"]
 DISK_GB = 50
-DATA_OK = "test -f /workspace/pet_bottle/annotations/instances_all_sam3full.json"
+DATA_OK = "test -f /workspace/bottle/annotations/instances_all_sam3full.json"
 
 
 def envval(name):
@@ -188,7 +188,7 @@ def total_shards(pods):
 
 
 def shard_cmd(total, i, extra):
-    return (f"python refine_masks.py --data-root pet_bottle "
+    return (f"python refine_masks.py --data-root bottle "
             f"--num-shards {total} --shard {i} --emit refined_{i}.json {extra}".strip())
 
 

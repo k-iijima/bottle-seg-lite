@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RTMDet-Ins-s pet_bottle を ONNX 化する（コンテナ内で実行）。
+# RTMDet-Ins-s（bottle データセット学習済み）を ONNX 化する（コンテナ内で実行）。
 # 入力（マウント）:
 #   /train  = train/segmentation（ckpt: work_pet_bottle/..., config: mmdet_configs/...）
 #   /out    = app/assets/models（rtmdet_ins.onnx を出力）
@@ -11,7 +11,7 @@ SCORE_THR=${SCORE_THR:-0.35}
 TOPK=${TOPK:-10}                  # モバイルでは masks 出力 [1,K,S,S] が支配的コスト → 小さく
 CKPT=${CKPT:-/train/work_pet_bottle/best_coco_segm_mAP_epoch_60.pth}
 MODEL_CFG=/train/mmdet_configs/rtmdet-ins_s_pet_bottle.py
-DEMO_IMG=${DEMO_IMG:-/train/datasets/pet_bottle/images/all/coco_train2017_10799.jpg}
+DEMO_IMG=${DEMO_IMG:-/train/datasets/bottle/images/all/coco_train2017_10799.jpg}
 
 # モデル側 test_cfg でも件数と閾値を絞る（rtmdet-ins はこちらが効く）
 cat > /tmp/model_cfg.py <<EOF

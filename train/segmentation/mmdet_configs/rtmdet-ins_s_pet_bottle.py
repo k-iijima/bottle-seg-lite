@@ -1,4 +1,4 @@
-# RTMDet-Ins-s を pet_bottle 3クラス（bottle/cap/label）でファインチューンする設定。
+# RTMDet-Ins-s を bottle データセットの3クラス（bottle/cap/label）でファインチューンする設定。
 # mmdetection v3.3.0 / mmcv 2.1.0 / torch 2.1.0 cu121（RunPod セットアップは
 # runpod/setup_train.sh、実行は runpod/run_train.sh）。
 #
@@ -9,7 +9,7 @@
 #   lr は線形スケール（0.004 × 32/256 = 5e-4）
 _base_ = '/workspace/mmdetection/configs/rtmdet/rtmdet-ins_s_8xb32-300e_coco.py'
 
-data_root = '/workspace/pet_bottle/'
+data_root = '/workspace/bottle/'
 metainfo = dict(
     classes=('bottle', 'cap', 'label'),
     palette=[(220, 20, 60), (0, 120, 255), (0, 200, 80)],

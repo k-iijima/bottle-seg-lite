@@ -17,7 +17,7 @@ segmentation / bbox / area だけが置き換わる。
   - 新マスク vs 旧ポリゴンマスクの IoU >= MIN_OLD_IOU（別物にすり替わる事故の防止）
 
 シャード分散（RunPod フリート用）:
-  python refine_masks.py --data-root pet_bottle --num-shards 24 --shard 0 --emit refined_0.json
+  python refine_masks.py --data-root bottle --num-shards 24 --shard 0 --emit refined_0.json
 ローカル動作確認:
   docker compose --profile tools run --rm seg python refine_masks.py --limit 3 --qa 12
 """
@@ -36,7 +36,7 @@ import numpy as np
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_ROOT = HERE / "datasets" / "pet_bottle"
+DEFAULT_ROOT = HERE / "datasets" / "bottle"
 
 MIN_SIDE = 24          # これ未満の長辺は対象外
 CROP_THRESH = 128      # これ未満は拡大 crop ルート

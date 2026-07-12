@@ -7,7 +7,7 @@
 （一致しない場合はエラーで停止）。属性は bottle アノテーションのみに持たせる。
 cap/label は parent_bottle_id で親を参照できるため属性は複製しない。
 
-  python merge_parts_attrs.py --data-root datasets/pet_bottle
+  python merge_parts_attrs.py --data-root datasets/bottle
 """
 import argparse
 import json
@@ -53,7 +53,7 @@ def merge_split(ann_dir: Path, split: str) -> None:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", type=Path, default=Path("datasets/pet_bottle"))
+    ap.add_argument("--data-root", type=Path, default=Path("datasets/bottle"))
     ap.add_argument("--splits", nargs="+", default=SPLITS)
     args = ap.parse_args()
     for s in args.splits:

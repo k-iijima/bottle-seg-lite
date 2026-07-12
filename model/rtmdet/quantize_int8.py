@@ -55,7 +55,7 @@ def main():
     ap.add_argument("--model", default="app/assets/models/rtmdet_ins.onnx")
     ap.add_argument("--out", default="app/assets/models/rtmdet_ins_int8.onnx")
     ap.add_argument("--calib-dir",
-                    default="train/segmentation/datasets/pet_bottle/images/all")
+                    default="train/segmentation/datasets/bottle/images/all")
     ap.add_argument("--num", type=int, default=128)
     ap.add_argument("--size", type=int, default=416)
     ap.add_argument("--seed", type=int, default=0)

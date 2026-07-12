@@ -3,7 +3,7 @@
 """シャード並列(segment_parts.py --emit-parts)が出した parts_*.json をまとめて、
 3クラス(bottle/cap/label)の instances_*_sam3parts.json を作る。id を再採番して衝突回避。
 
-  python merge_parts.py --data-root ./pet_bottle --parts "parts_*.json"
+  python merge_parts.py --data-root ./bottle --parts "parts_*.json"
 """
 import argparse, glob, json
 from pathlib import Path
@@ -18,7 +18,7 @@ SUF_FROM, SUF_TO = "_sam3merge", "_sam3parts"
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", type=Path, default=Path("pet_bottle"))
+    ap.add_argument("--data-root", type=Path, default=Path("bottle"))
     ap.add_argument("--parts", default="parts_*.json")
     args = ap.parse_args()
     ann_dir = args.data_root / "annotations"

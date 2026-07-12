@@ -1,7 +1,7 @@
-# pet_bottle データセット
+# bottle データセット
 
 ペットボトルのリアルタイム検出・インスタンスセグメンテーション（+属性認識）学習用データセット。
-`datasets/pet_bottle/` に配置。**現在進行中の作業状況は [DATASET_STATUS.md](DATASET_STATUS.md) を参照**。
+`datasets/bottle/` に配置。**現在進行中の作業状況は [DATASET_STATUS.md](DATASET_STATUS.md) を参照**。
 
 ## 1. 概要
 
@@ -107,7 +107,7 @@ Qwen3-VL の VQA で bottle crop ごとに付与。各属性に `unknown` あり
 - **TACO**: アノテーション CC-BY 4.0、画像は投稿者ライセンス混在。
 - **YouTube**: Creative Commons (CC-BY) 表示の動画のみ収集。動画IDはファイル名に保持
   （`youtube_<videoID>_<frame>.jpg`）。
-- 再配布・公開時は上記の帰属表示が必要。**社外公開前にライセンス再確認を推奨**。
+- 再配布・公開時は上記の帰属表示が必要。
 
 ## 8. 出力・再生成
 

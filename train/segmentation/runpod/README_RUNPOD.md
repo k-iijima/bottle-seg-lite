@@ -60,7 +60,7 @@ RTMDet-Ins-s を COCO 事前学習から 60 epoch ファインチューンする
 
 ```bash
 # 1) ローカル: 学習アノテ生成 + 入力パッケージ（runpod/train_inputs.tar ~4GB）
-python make_train_anns.py --data-root datasets/pet_bottle
+python make_train_anns.py --data-root datasets/bottle
 docker compose --profile tools run --rm seg bash runpod/package_train_inputs.sh
 # 2) H100 pod を1台作成（RunPod PyTorch テンプレ、ports 22/tcp、disk 80GB）し、scp で転送
 scp -i runpod/.rp/id_rsa -P <PORT> runpod/train_inputs.tar root@<IP>:/workspace/
@@ -124,7 +124,7 @@ Pod（Web ターミナル等）:
 ```bash
 cd /workspace
 runpodctl receive <受信コード>
-tar xzf attr_inputs.tar.gz        # -> pet_bottle/ と attribute_pipeline.py, runpod/
+tar xzf attr_inputs.tar.gz        # -> bottle/ と attribute_pipeline.py, runpod/
 ```
 
 ## 4. Pod: セットアップ＆実行
@@ -174,7 +174,7 @@ runpodctl send /workspace/attr_outputs.tar.gz   # 受信コードをコピー
 ```
 ローカル:
 ```bash
-cd train/segmentation/datasets/pet_bottle/annotations
+cd train/segmentation/datasets/bottle/annotations
 runpodctl receive <受信コード>
 tar xzf attr_outputs.tar.gz        # instances_*_sam3attr.json が annotations/ に展開
 ```

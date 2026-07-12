@@ -32,7 +32,7 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DATA_ROOT = HERE / "datasets" / "pet_bottle"
+DATA_ROOT = HERE / "datasets" / "bottle"
 DUP_IOU = 0.90
 SAME_PARENT_NMS_IOU = 0.30  # 同一親・同クラス parts の重複判定
 CONTAIN_KEEP = 0.5    # 記録親との包含がこれ以上なら現状維持

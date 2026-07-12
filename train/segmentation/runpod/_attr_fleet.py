@@ -39,7 +39,7 @@ GPU = "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"   # Server Edition は
 MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 DISK_GB = 120                                    # モデル ~62GB + torch + データ（50GB では足りない）
 VLM_MIN = 96
-DATA_OK = "test -f /workspace/pet_bottle/annotations/instances_all_sam3merge.json"
+DATA_OK = "test -f /workspace/bottle/annotations/instances_all_sam3merge.json"
 
 
 def envval(name):
@@ -189,7 +189,7 @@ def cmd_seed(args):
 
 
 def shard_cmd(total, i, extra):
-    return (f"python attribute_pipeline.py --data-root pet_bottle "
+    return (f"python attribute_pipeline.py --data-root bottle "
             f"--vlm-model {MODEL} --material-backend vlm --vlm-min {VLM_MIN} "
             f"--num-shards {total} --shard {i} --emit-attrs attrs_{i}.json {extra}".strip())
 

@@ -6,7 +6,7 @@
 - all に適用後、ann id 一致で train/val/test にも伝播
 - rejected（旧マスク温存）と old_iou 分布を集計して品質レポートを出す
 
-  python merge_refined.py --data-root datasets/pet_bottle --refined "runpod/refined/refined_*.json"
+  python merge_refined.py --data-root datasets/bottle --refined "runpod/refined/refined_*.json"
   python merge_refined.py --dry-run     # 統計のみ
 """
 import argparse
@@ -20,7 +20,7 @@ SPLITS = ["all", "train", "val", "test"]
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", type=Path, default=Path("datasets/pet_bottle"))
+    ap.add_argument("--data-root", type=Path, default=Path("datasets/bottle"))
     ap.add_argument("--refined", default="runpod/refined/refined_*.json")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()

@@ -11,7 +11,7 @@ services:
       - ./app/assets/models:/out
     command: bash /work/export_rtmdet.sh
 
-  # One-off: SAM 3 で pet_bottle データセットの低品質 segmentation を再生成する（GPU 必須）。
+  # One-off: SAM 3 で bottle データセットの低品質 segmentation を再生成する（GPU 必須）。
   # 動作確認:  docker compose --profile tools run --rm seg                     (= make seg-preview)
   # 全件:      docker compose --profile tools run --rm seg python make_sam3_segmentation.py
   seg:

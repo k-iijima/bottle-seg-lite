@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """yt_fleet が回収した youtube_out_<shard>.tar.gz をまとめ、pod 間グローバル dedup
-（CLIP 埋め込みのコサイン類似）を掛けて pet_bottle データセットへ取り込む。
+（CLIP 埋め込みのコサイン類似）を掛けて bottle データセットへ取り込む。
 
 各 pod は frames を別動画から作るので名前衝突はないが、似た構図は pod を跨いで重複し得る。
 そこで埋め込みで全体 greedy dedup してから images/all へ配置する。
 
 出力（ステージング・非破壊）:
-  datasets/pet_bottle/images/all/youtube_*.jpg
-  datasets/pet_bottle/annotations/instances_youtube_sam3merge.json
-  datasets/pet_bottle/metadata/manifest_youtube.csv
+  datasets/bottle/images/all/youtube_*.jpg
+  datasets/bottle/annotations/instances_youtube_sam3merge.json
+  datasets/bottle/metadata/manifest_youtube.csv
 
   python merge_youtube_fleet.py [--fleet-dir runpod/youtube_fleet] [--dedup-thresh 0.9]
 本体(instances_*_sam3merge.json)への統合は merge_youtube.py で別途。
@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-DATASET_ROOT = HERE / "datasets" / "pet_bottle"
+DATASET_ROOT = HERE / "datasets" / "bottle"
 IMG_DIR = DATASET_ROOT / "images" / "all"
 ANN_DIR = DATASET_ROOT / "annotations"
 META_DIR = DATASET_ROOT / "metadata"

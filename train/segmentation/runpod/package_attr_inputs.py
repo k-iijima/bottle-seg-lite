@@ -12,7 +12,7 @@ import argparse, json, tarfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent / "datasets" / "pet_bottle"
+ROOT = HERE.parent / "datasets" / "bottle"
 SRC_ALL = "instances_all_sam3merge.json"
 
 
@@ -33,10 +33,10 @@ def main():
     print(f"[package] images with >= {args.vlm_min}px bottles: {len(need)}/{len(imgs)}")
 
     with tarfile.open(args.out, "w") as t:      # JPEG は圧縮しない（速度優先）
-        t.add(ROOT / "annotations" / SRC_ALL, arcname=f"pet_bottle/annotations/{SRC_ALL}")
+        t.add(ROOT / "annotations" / SRC_ALL, arcname=f"bottle/annotations/{SRC_ALL}")
         for k, iid in enumerate(sorted(need)):
             fn = imgs[iid]["file_name"]
-            t.add(ROOT / fn, arcname=f"pet_bottle/{fn}")
+            t.add(ROOT / fn, arcname=f"bottle/{fn}")
             if (k + 1) % 2000 == 0:
                 print(f"  {k+1}/{len(need)}")
     print(f"[package] {args.out} ({args.out.stat().st_size/1e9:.2f} GB)")

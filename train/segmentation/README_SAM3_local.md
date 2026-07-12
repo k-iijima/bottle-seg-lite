@@ -1,6 +1,6 @@
 # SAM 3 でセグメンテーションを付与する（ローカル / RTX 4060）
 
-既存の COCO bbox データセット `datasets/pet_bottle` の **低品質な segmentation だけ** を、
+既存の COCO bbox データセット `datasets/bottle` の **低品質な segmentation だけ** を、
 SAM 3 の **box プロンプト** で生成し直して COCO instance segmentation 形式にし直します。
 
 - スクリプト: [make_sam3_segmentation.py](make_sam3_segmentation.py)
@@ -60,7 +60,7 @@ make seg           # 全件処理（約492件 / 432画像、RTX 4060 で ~2-3分
 docker compose --profile tools run --rm seg python preview_crops.py --n 50
 ```
 
-- 出力: `datasets/pet_bottle/qa_sam3/crops/crop_*.jpg` と一覧 `crops/_montage.jpg`
+- 出力: `datasets/bottle/qa_sam3/crops/crop_*.jpg` と一覧 `crops/_montage.jpg`
   （緑=SAM3 マスク, オレンジ=元の bbox）
 - 全体プレビュー（再生成マスクを元画像上に重畳）は `qa_sam3/preview_*.jpg`
 
@@ -87,12 +87,12 @@ python make_sam3_segmentation.py --limit 30
 ## 出力
 
 ```
-datasets/pet_bottle/annotations/
+datasets/bottle/annotations/
   instances_all_sam3seg.json
   instances_train_sam3seg.json
   instances_val_sam3seg.json
   instances_test_sam3seg.json
-datasets/pet_bottle/qa_sam3/
+datasets/bottle/qa_sam3/
   preview_*.jpg              # 再生成マスクの目視確認
 ```
 

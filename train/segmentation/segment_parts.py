@@ -10,7 +10,7 @@ top マスクを取り、全体画像座標へ戻して別インスタンス(cat
 入力: instances_*_sam3merge.json（bottle）
 出力: instances_*_sam3parts.json
 
-  python segment_parts.py --data-root ./pet_bottle --part-min 96       # RunPod
+  python segment_parts.py --data-root ./bottle --part-min 96       # RunPod
   docker compose --profile tools run --rm seg python segment_parts.py --part-min 160 --limit 12  # local 試し
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from PIL import Image
 from tqdm.auto import tqdm
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_ROOT = HERE / "datasets" / "pet_bottle"
+DEFAULT_ROOT = HERE / "datasets" / "bottle"
 SRC_ALL = "instances_all_sam3merge.json"
 SRC_SPLITS = ["instances_train_sam3merge.json", "instances_val_sam3merge.json", "instances_test_sam3merge.json"]
 SUF_FROM, SUF_TO = "_sam3merge", "_sam3parts"

@@ -9,7 +9,7 @@
 - 各画像は代表 split のみに所属させ、cross-split リーク(同一画像が train と test 等)を解消。
 - all + train/val/test を整合して書き換え。元ファイルは predupe_backup/ に退避。
 
-  python dedup_merge.py --data-root datasets/pet_bottle [--dry-run]
+  python dedup_merge.py --data-root datasets/bottle [--dry-run]
 """
 import argparse, json, shutil
 from collections import defaultdict
@@ -35,7 +35,7 @@ def ann_key(a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", type=Path, default=Path("datasets/pet_bottle"))
+    ap.add_argument("--data-root", type=Path, default=Path("datasets/bottle"))
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     ann_dir = args.data_root / "annotations"

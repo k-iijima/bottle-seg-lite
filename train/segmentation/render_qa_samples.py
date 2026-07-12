@@ -16,7 +16,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE / "datasets" / "pet_bottle"
+ROOT = HERE / "datasets" / "bottle"
 OUT = ROOT / "qa_sam3full" / "samples"
 N_PER = 4
 

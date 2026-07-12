@@ -9,7 +9,7 @@
   既存比率に合わせ 80/10/10（hash(vid)%10: 0-7=train, 8=val, 9=test）。
 - 元ファイルは youtube_premerge_backup/ に退避。
 
-  python merge_youtube.py [--data-root datasets/pet_bottle] [--dry-run]
+  python merge_youtube.py [--data-root datasets/bottle] [--dry-run]
 """
 import argparse, hashlib, json, shutil
 from collections import Counter
@@ -35,7 +35,7 @@ def split_of(vid):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", type=Path, default=Path("datasets/pet_bottle"))
+    ap.add_argument("--data-root", type=Path, default=Path("datasets/bottle"))
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     ann_dir = args.data_root / "annotations"

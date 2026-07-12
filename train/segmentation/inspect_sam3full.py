@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DATA_ROOT = HERE / "datasets" / "pet_bottle"
+DATA_ROOT = HERE / "datasets" / "bottle"
 
 ATTR_SCHEMA = {
     "material": {"unknown", "pet", "glass", "can", "other"},

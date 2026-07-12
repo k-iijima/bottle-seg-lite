@@ -4,9 +4,9 @@
 set -e
 : "${HF_TOKEN:?HF_TOKEN を環境変数で渡してください (export HF_TOKEN=hf_...)}"
 
-python segment_parts.py --data-root pet_bottle "$@"
+python segment_parts.py --data-root bottle "$@"
 
-cd pet_bottle/annotations
+cd bottle/annotations
 tar czf /workspace/parts_outputs.tar.gz \
   instances_all_sam3parts.json \
   instances_train_sam3parts.json \

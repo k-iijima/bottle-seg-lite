@@ -31,7 +31,7 @@ make cvat-superuser
 
 ## 3. 取り込む zip（生成済み）
 
-`datasets/pet_bottle/cvat/` に出力済み。Project の **Actions → Import dataset →
+`datasets/bottle/cvat/` に出力済み。Project の **Actions → Import dataset →
 形式 COCO 1.0** で zip を指定すると subset 名の Task ができる。
 
 | zip | 画像数 | 用途 |
@@ -51,7 +51,7 @@ python export_coco_for_cvat.py --splits all --subset review_xxx \
 python export_coco_for_cvat.py --splits test --only-source sam3_part   # seg_source で絞る
 ```
 
-検品リストの元データ: `datasets/pet_bottle/qa_sam3full/report.json`（機械修正前の疑義全件）/
+検品リストの元データ: `datasets/bottle/qa_sam3full/report.json`（機械修正前の疑義全件）/
 `report_after_fix.json`（修正後に残る疑義）。リスト生成例は
 `qa_sam3full/review_*_images.txt` を参照。
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-既存の COCO bbox データセット (datasets/pet_bottle) の「低品質な segmentation」だけを、
+既存の COCO bbox データセット (datasets/bottle) の「低品質な segmentation」だけを、
 SAM 3 の box プロンプト (predict_inst) で生成し直して COCO instance segmentation 形式に
 し直すスクリプト。ローカル GPU (例: RTX 4060 8GB) 想定。
 
@@ -42,7 +42,7 @@ from tqdm.auto import tqdm
 # 設定
 # ----------------------------------------------------------------------------
 HERE = Path(__file__).resolve().parent
-DATASET_ROOT = HERE / "datasets" / "pet_bottle"
+DATASET_ROOT = HERE / "datasets" / "bottle"
 ANN_DIR = DATASET_ROOT / "annotations"
 QA_DIR = DATASET_ROOT / "qa_sam3"
 

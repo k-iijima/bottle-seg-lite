@@ -10,7 +10,7 @@ pkill -f segment_parts.py 2>/dev/null || true
 sleep 3
 for ((j=0;j<COUNT;j++)); do
   i=$((START+j))
-  setsid bash -c "python segment_parts.py --data-root pet_bottle --part-min ${PMIN} --num-shards ${N} --shard ${i} --emit-parts parts_${i}.json > w_${i}.log 2>&1" </dev/null &
+  setsid bash -c "python segment_parts.py --data-root bottle --part-min ${PMIN} --num-shards ${N} --shard ${i} --emit-parts parts_${i}.json > w_${i}.log 2>&1" </dev/null &
 done
 sleep 6
 echo "launched shards ${START}..$((START+COUNT-1)) of ${N} (part_min=${PMIN})"

@@ -1,6 +1,6 @@
-# pet_bottle データセット 最新状態（2026-07-11 時点）
+# bottle データセット 最新状態（2026-07-11 時点）
 
-ペットボトル検出/セグメンテーション用データセット `datasets/pet_bottle` の現況まとめ。
+ボトル検出/セグメンテーション用データセット `datasets/bottle` の現況まとめ。
 **データセット自体の恒久的な仕様（構成・スキーマ・ライセンス）は [DATASET.md](DATASET.md)**、
 個別手順は [README_SAM3_local.md](README_SAM3_local.md) / [README_CVAT.md](README_CVAT.md) /
 [runpod/README_RUNPOD.md](runpod/README_RUNPOD.md) を参照。
@@ -73,7 +73,7 @@ orientation / depiction(実物か絵・印刷か)`（各 unknown あり）。
 
 ## 4. 機械検査の結果（2026-07-11、[inspect_sam3full.py](inspect_sam3full.py)）
 
-レポート: `datasets/pet_bottle/qa_sam3full/report.json`、
+レポート: `datasets/bottle/qa_sam3full/report.json`、
 サンプル描画: `qa_sam3full/samples/`（[render_qa_samples.py](render_qa_samples.py)、目視確認済み）。
 
 **問題なし**: ID/参照整合・画像ファイル実在（欠落0/未参照0）・split リーク 0・属性スキーマ違反 0。
@@ -141,6 +141,6 @@ orientation / depiction(実物か絵・印刷か)`（各 unknown あり）。
 - [ ] 精度改善の候補: CVAT 検品の反映後に再学習 / rtmdet-ins_m へのスケールアップ / 入力解像度調整
 
 ## 6. CVATで見るには
-検品セット出力済み: `datasets/pet_bottle/cvat/{review_multicap,review_attr,val,test}_cvat_coco.zip`。
+検品セット出力済み: `datasets/bottle/cvat/{review_multicap,review_attr,val,test}_cvat_coco.zip`。
 ラベル定義は [cvat_labels_parts.json](cvat_labels_parts.json)（bottle 10属性対応済み）を CVAT の
 Raw に貼付。手順・検品観点・書き戻しは [README_CVAT.md](README_CVAT.md) を参照。

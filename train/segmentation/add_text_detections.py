@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-DATASET_ROOT = HERE / "datasets" / "pet_bottle"
+DATASET_ROOT = HERE / "datasets" / "bottle"
 ANN_DIR = DATASET_ROOT / "annotations"
 
 SRC_ALL = "instances_all_sam3seg.json"

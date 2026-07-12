@@ -3,7 +3,7 @@
 """シャード並列(attribute_pipeline.py --emit-attrs)が出した attrs_*.json をまとめて、
 属性付き instances_*_sam3attr.json を作る。未処理 ann は全属性 unknown で埋める。
 
-  python merge_attrs.py --data-root datasets/pet_bottle --attrs "runpod/attrs/attrs_*.json"
+  python merge_attrs.py --data-root datasets/bottle --attrs "runpod/attrs/attrs_*.json"
 """
 import argparse, glob, json
 from collections import Counter
@@ -18,7 +18,7 @@ ALL_ATTRS = ["material", "cap", "cap_color", "label", "label_color",
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", type=Path, default=Path("datasets/pet_bottle"))
+    ap.add_argument("--data-root", type=Path, default=Path("datasets/bottle"))
     ap.add_argument("--attrs", default="runpod/attrs/attrs_*.json")
     args = ap.parse_args()
     ann_dir = args.data_root / "annotations"

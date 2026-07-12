@@ -7,10 +7,10 @@ cd /work
 mkdir -p runpod
 tar cf runpod/train_inputs.tar \
   -C /work/datasets \
-    pet_bottle/images/all \
-    pet_bottle/annotations/instances_train_trainready.json \
-    pet_bottle/annotations/instances_val_trainready.json \
-    pet_bottle/annotations/instances_test_trainready.json \
+    bottle/images/all \
+    bottle/annotations/instances_train_trainready.json \
+    bottle/annotations/instances_val_trainready.json \
+    bottle/annotations/instances_test_trainready.json \
   -C /work \
     mmdet_configs/rtmdet-ins_s_pet_bottle.py \
     runpod/setup_train.sh runpod/run_train.sh

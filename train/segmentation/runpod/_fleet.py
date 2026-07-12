@@ -129,7 +129,7 @@ def cmd_dispatch(args):
         prep = (
             "#!/usr/bin/env bash\ncd /workspace\nchmod 600 /root/.ssh/id_rsa\n"
             f"ssh -i /root/.ssh/id_rsa -p {hport} -o StrictHostKeyChecking=no root@{hip} "
-            "'tar cf - -C /workspace pet_bottle' | tar xf - -C /workspace\n"
+            "'tar cf - -C /workspace bottle' | tar xf - -C /workspace\n"
             "bash setup_parts.sh > setup.log 2>&1\n"
             f"bash run_shards.sh {TOTAL_SHARDS} {PART_MIN} {pd['start']} {WPP}\n"
             "echo PREP_DONE >> prep.log\n")
@@ -182,11 +182,11 @@ def cmd_heal(args):
         if not pd.get("ssh"):
             continue
         c = sshc(pd["ip"], pd["port"])
-        rc, o = run(c, "test -f /workspace/pet_bottle/annotations/instances_all_sam3merge.json && echo OK || echo NO")
+        rc, o = run(c, "test -f /workspace/bottle/annotations/instances_all_sam3merge.json && echo OK || echo NO")
         if "NO" in o:
             print(pd["id"], "re-pulling data from hub ...")
             run(c, f"cd /workspace && ssh -i /root/.ssh/id_rsa -p {hport} -o StrictHostKeyChecking=no "
-                   f"root@{hip} 'tar cf - -C /workspace pet_bottle' | tar xf - -C /workspace")
+                   f"root@{hip} 'tar cf - -C /workspace bottle' | tar xf - -C /workspace")
         miss = []
         for s in range(pd["start"], pd["start"] + WPP):
             rc, o = run(c, f"test -f /workspace/parts_{s}.json && echo Y || echo N")
@@ -194,7 +194,7 @@ def cmd_heal(args):
                 miss.append(s)
         for s in miss:
             run(c, f"cd /workspace && pkill -f 'shard {s} ' 2>/dev/null; setsid bash -c "
-                   f"'python segment_parts.py --data-root pet_bottle --part-min {PART_MIN} "
+                   f"'python segment_parts.py --data-root bottle --part-min {PART_MIN} "
                    f"--num-shards {TOTAL_SHARDS} --shard {s} --emit-parts parts_{s}.json > w_{s}.log 2>&1' </dev/null &")
         print(pd["id"], "relaunched missing shards", miss)
         c.close()

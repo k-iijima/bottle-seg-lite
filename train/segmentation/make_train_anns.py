@@ -7,7 +7,7 @@
   --depicted keep で無効化、--depicted drop で完全削除も選べる。
 - それ以外は _sam3full そのまま（3クラス、リファイン済みマスク、属性付き）。
 
-  python make_train_anns.py --data-root datasets/pet_bottle
+  python make_train_anns.py --data-root datasets/bottle
 """
 import argparse
 import json
@@ -19,7 +19,7 @@ SPLITS = ["train", "val", "test"]
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", type=Path, default=Path("datasets/pet_bottle"))
+    ap.add_argument("--data-root", type=Path, default=Path("datasets/bottle"))
     ap.add_argument("--depicted", choices=["ignore", "drop", "keep"], default="ignore")
     args = ap.parse_args()
     ann_dir = args.data_root / "annotations"
