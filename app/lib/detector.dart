@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 
 /// RTMDet-Ins (mmdeploy export) を実行し、インスタンスマスク+枠の RGBA
@@ -48,7 +49,13 @@ class Detector {
 
   Future<void> init() async {
     _ort = OnnxRuntime();
-    _session = await _ort!.createSessionFromAsset(_assetPath);
+    if (kIsWeb) {
+      // Web ではプラグインがパスをそのまま ort-web の fetch に渡すため、
+      // Flutter web の実配信パス（assets/<アセットキー>）を明示する必要がある。
+      _session = await _ort!.createSession('assets/$_assetPath');
+    } else {
+      _session = await _ort!.createSessionFromAsset(_assetPath);
+    }
   }
 
   /// [rgba] は inputSize×inputSize の RGBA バッファ（呼び出し側でリサイズ済み）。
