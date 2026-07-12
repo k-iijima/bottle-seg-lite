@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RTMDet-Ins 学習環境のセットアップ（RunPod PyTorch イメージ上）。
-# Colab で動作検証済みの組合せ（RTMDet-Ins検証.ipynb）を venv に再現する:
+# Colab で動作検証済みの組合せを venv に再現する:
 #   torch 2.1.0 cu121 / numpy 1.26.4 / mmcv 2.1.0 / mmdetection v3.3.0
 set -e
 
