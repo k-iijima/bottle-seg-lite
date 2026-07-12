@@ -162,10 +162,14 @@ class _CameraSegViewState extends State<CameraSegView> {
         t.disposeImages(); // ロストで破棄されたトラック
       }
       final ids = Map<Detection, int>.identity();
+      final capOf =
+          MultiTracker.assignParts(_tracker.tracks, res.detections, 1);
+      final lblOf =
+          MultiTracker.assignParts(_tracker.tracks, res.detections, 2);
       for (final t in _tracker.tracks) {
         if (t.lastMatch != null) ids[t.lastMatch!] = t.id;
-        final cap = MultiTracker.partIn(t.rect, res.detections, 1);
-        final lbl = MultiTracker.partIn(t.rect, res.detections, 2);
+        final cap = capOf[t];
+        final lbl = lblOf[t];
         if (cap != null) {
           final im = await _decodeCrop(rgba, cap.rect);
           if (im != null) {
@@ -314,6 +318,8 @@ class _CameraSegViewState extends State<CameraSegView> {
       final double s = _detector.inputSize.toDouble();
       final now = DateTime.now();
       var updated = false;
+      final capOf = MultiTracker.assignParts(_tracker.tracks, dets, 1);
+      final lblOf = MultiTracker.assignParts(_tracker.tracks, dets, 2);
       for (final t in List<Track>.of(_tracker.tracks)) {
         if (t.lastMatch == null) continue; // 見失い中の位置では推論しない
         if (now.difference(t.lastAttrAt) < _attrInterval) continue;
@@ -346,8 +352,8 @@ class _CameraSegViewState extends State<CameraSegView> {
           // 検出器の cap/label パーツ有無はより強い証拠なので融合する。
           // 「あり」は誤検出が少なく強め、「なし」は角度・遮蔽で見えない
           // だけの可能性があるため弱めに効かせる。
-          final capDet = MultiTracker.partIn(t.rect, dets, 1);
-          final lblDet = MultiTracker.partIn(t.rect, dets, 2);
+          final capDet = capOf[t];
+          final lblDet = lblOf[t];
           t.attrs.addObservation('cap', capDet != null ? 0 : 1,
               alpha: capDet != null ? 0.35 : 0.15);
           t.attrs.addObservation('label', lblDet != null ? 0 : 1,

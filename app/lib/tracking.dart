@@ -130,15 +130,43 @@ class MultiTracker {
     return removed;
   }
 
-  /// [bottle] 内（1 割の余裕つき）に中心があるクラス [cls] の最高スコア検出。
-  static Detection? partIn(ui.Rect bottle, List<Detection> dets, int cls) {
-    final area = bottle.inflate(bottle.shortestSide * 0.1);
-    Detection? best;
-    for (final d in dets) {
-      if (d.cls != cls || !area.contains(d.center)) continue;
-      if (best == null || d.score > best.score) best = d;
+  /// クラス [cls] の部位検出を各トラックのボトル枠へ排他的に割り当てる。
+  ///
+  /// 候補はボトル枠（1 割の余裕つき）に中心がある検出。枠が重なった隣の
+  /// ボトルの部位を拾わないよう「部位 bbox の枠内包含率 → スコア」の降順で
+  /// 貪欲に対応付け、1 検出は 1 トラックにのみ割り当てる。
+  /// 見失い中のトラック（lastMatch == null）は古い位置に他ボトルの部位が
+  /// 入り込みうるため対象外。
+  static Map<Track, Detection> assignParts(
+      List<Track> tracks, List<Detection> dets, int cls) {
+    final pairs =
+        <({double contain, double score, Track track, Detection det})>[];
+    for (final t in tracks) {
+      if (t.lastMatch == null) continue;
+      final area = t.rect.inflate(t.rect.shortestSide * 0.1);
+      for (final d in dets) {
+        if (d.cls != cls || !area.contains(d.center)) continue;
+        final inter = area.intersect(d.rect);
+        final partArea = d.rect.width * d.rect.height;
+        final contain =
+            partArea <= 0 || inter.width <= 0 || inter.height <= 0
+                ? 0.0
+                : inter.width * inter.height / partArea;
+        pairs.add((contain: contain, score: d.score, track: t, det: d));
+      }
     }
-    return best;
+    pairs.sort((a, b) {
+      final c = b.contain.compareTo(a.contain);
+      return c != 0 ? c : b.score.compareTo(a.score);
+    });
+    final assigned = Map<Track, Detection>.identity();
+    final usedDets = Set<Detection>.identity();
+    for (final p in pairs) {
+      if (assigned.containsKey(p.track) || usedDets.contains(p.det)) continue;
+      assigned[p.track] = p.det;
+      usedDets.add(p.det);
+    }
+    return assigned;
   }
 
   static double iou(ui.Rect a, ui.Rect b) {
