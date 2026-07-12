@@ -1,10 +1,10 @@
-# bottle-seg-lite — リアルタイム・ペットボトル・インスタンスセグメンテーション
+# bottle-seg-lite — だいたいのボトルを検出セグメンテーションするモデル
 
 カメラ映像に ONNX モデルの検出・セグメンテーション結果をリアルタイム重畳する
 **Flutter（Web / Android）** アプリと、その自作モデル（RTMDet-Ins-s、bottle/cap/label 3クラス）の
 **データセット作成〜学習〜ONNX 化パイプライン**一式です。開発は Docker で完結します。
 
-- **映像は止まらない**: カメラ映像はネイティブ層で再生され、Dart/Flutter とは独立して描画されます。
+- **映像をとめない**: カメラ映像はネイティブ層で再生され、Dart/Flutter とは独立して描画されます。
   推論は非同期ループで動き、前フレームの推論が終わるまで新しいフレームは**スキップ**されるため、
   プレビューがモデルを待つことはありません。
 - **モデルは差し替え可能**: デモ用の `LR-ASPP MobileNetV3-Large`（`make model`）と、
@@ -45,6 +45,20 @@ Qwen3-VL による bottle 属性10種）の作成と、RTMDet-Ins-s の学習（
 - RunPod フリート運用: [train/segmentation/runpod/README_RUNPOD.md](train/segmentation/runpod/README_RUNPOD.md)
 
 シークレットは `.env` に置く（`.env.example` をコピーして作成。git 管理外）。
+
+## 学習済みモデル（GitHub Releases）
+
+学習済みモデルは [Releases](https://github.com/k-iijima/bottle-seg-lite/releases) からダウンロードできます
+（test segm_mAP 0.352。精度・ONNX I/O 仕様はリリースノート参照）。
+
+| ファイル | 配置先 / 用途 |
+|---|---|
+| `rtmdet_ins.onnx` | `app/assets/models/rtmdet_ins.onnx` に置くと Flutter アプリで推論可能 |
+| `best_coco_segm_mAP_epoch_60.pth` | `train/segmentation/work_pet_bottle/` に置くと `make rtmdet-onnx` で再エクスポート可能 |
+
+```bash
+gh release download v0.1.0 -R k-iijima/bottle-seg-lite -p rtmdet_ins.onnx -O app/assets/models/rtmdet_ins.onnx
+```
 
 ## 必要なもの
 
