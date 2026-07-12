@@ -42,6 +42,9 @@ class _CameraSegViewState extends State<CameraSegView> {
   double _fps = 0;
   DateTime _lastDone = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// ステージ別所要時間の表示文字列（ボトルネック特定用、Web 版と同形式）。
+  String _timing = '';
+
   @override
   void initState() {
     super.initState();
@@ -102,15 +105,23 @@ class _CameraSegViewState extends State<CameraSegView> {
     _lastStart = DateTime.now();
     try {
       final started = DateTime.now();
+      final sw = Stopwatch()..start();
       final rotation = _controller?.description.sensorOrientation ?? 90;
       final rgba = _yuv420ToRgba(image, _detector.inputSize, rotation);
+      final yuvMs = sw.elapsedMilliseconds;
       final bool swap = rotation == 90 || rotation == 270;
       final double aspect = swap
           ? image.height / image.width
           : image.width / image.height;
       final overlay = await _detector.run(rgba);
+      sw.reset();
       final img = await _decodeMask(overlay, _detector.inputSize);
+      final decMs = sw.elapsedMilliseconds;
       final ms = DateTime.now().difference(started).inMilliseconds;
+      final st = _detector.lastStageMs;
+      final timing = 'yuv $yuvMs · ten ${st['ten']} · run ${st['run']}'
+          ' · dets ${st['dets']} · masks ${st['masks']}'
+          ' · ovl ${st['ovl']} · dec $decMs';
       if (!_disposed) {
         _mask?.dispose();
         final c = _detector.lastCounts;
@@ -126,6 +137,7 @@ class _CameraSegViewState extends State<CameraSegView> {
           _mask = img;
           _frameAspect = aspect;
           _lastInferMs = ms;
+          _timing = timing;
           _status = 'bottle:${c[0]} cap:${c[1]} label:${c[2]}';
         });
       } else {
@@ -253,7 +265,11 @@ class _CameraSegViewState extends State<CameraSegView> {
         Positioned(
           left: 12,
           top: 12,
-          child: StatusChip(status: _status, inferMs: _lastInferMs, fps: _fps),
+          child: StatusChip(
+              status: _status,
+              inferMs: _lastInferMs,
+              fps: _fps,
+              detail: _timing),
         ),
       ],
     );
