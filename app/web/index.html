@@ -30,7 +30,10 @@
     script on the web platform. Keep the version in sync with the plugin.
     ort.min.js は WebGPU EP 同梱（executionProviders で指定して使う）。
   -->
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js"></script>
+  <!-- 1.21.0 では WebGPU(JSEP) が fp16 モデルのセッション作成に失敗する。
+       1.27.0 で解消し JSEP の性能改善も入っている（wasm は 1.21/1.27 とも
+       全モデル動作を Node で確認済み） -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort.min.js"></script>
   <script>
     // crossOriginIsolated のとき wasm をマルチスレッド化（既定は控えめなため明示）
     if (self.crossOriginIsolated && self.ort) {

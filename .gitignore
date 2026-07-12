@@ -4,6 +4,8 @@
 # Flutter
 app/.dart_tool/
 app/build/
+# APK ビルド時の flutter create が生成するテンプレート
+app/README.md
 app/.flutter-plugins
 app/.flutter-plugins-dependencies
 app/pubspec.lock

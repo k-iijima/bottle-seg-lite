@@ -123,7 +123,7 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
       if (options.containsKey('providers')) {
         final providers = options['providers'] as List<String>;
         final jsProviders =
-            providers.map((provider) {
+            providers.map<Object>((provider) {
               // Map Flutter provider names to onnxruntime-web provider names
               switch (provider) {
                 case 'CPU':
@@ -134,7 +134,9 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
                 case 'WEB_GPU':
                   return 'webgpu';
                 case 'WEB_NN':
-                  return 'webnn';
+                  // LOCAL PATCH: 文字列 'webnn' だと deviceType が既定 'cpu' に
+                  // なり加速されないため、オブジェクト形式で GPU を明示する
+                  return {'name': 'webnn', 'deviceType': 'gpu'};
                 default:
                   throw PlatformException(
                     code: 'INVALID_PROVIDER',
@@ -145,7 +147,7 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
             }).toList();
 
         // Set executionProviders property
-        jsOptions.setProperty('executionProviders'.toJS, jsArrayFrom(jsProviders));
+        jsOptions.setProperty('executionProviders'.toJS, jsProviders.jsify()!);
       }
 
       // Set other options like intraOpNumThreads, interOpNumThreads if needed

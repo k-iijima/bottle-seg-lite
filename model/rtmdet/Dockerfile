@@ -28,6 +28,9 @@ RUN git clone -b v1.3.1 --depth 1 https://github.com/open-mmlab/mmdeploy.git /op
 # numpy を最後に再固定（依存が 2.x を引き込むのを防ぐ）
 RUN pip install --force-reinstall --no-deps "numpy==1.26.4"
 
+# fp16 変換（convert_fp16.py）用
+RUN pip install onnxconverter-common
+
 # onnxruntime 1.16 の .so は実行可能スタックを要求しており、新しめの
 # Docker/WSL カーネルだと import 時に "cannot enable executable stack" で
 # 落ちる → GNU_STACK フラグをクリアしておく

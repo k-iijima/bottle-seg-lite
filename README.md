@@ -119,9 +119,21 @@ docker compose up --build web                    # = make up
 
 ## パフォーマンス（Web）
 
-以下は実装済み:
+以下は実装済み（RTX 4060 Laptop 実測: WebGPU 115ms/8fps、WebNN 44ms/20fps）:
 
+- **入力 320・前処理モデル内蔵**: 入力は uint8 RGBA NHWC で canvas の
+  getImageData を直渡し（RGBA→BGR・正規化は `embed_preprocess.py` が
+  ONNX グラフ先頭に埋め込み）。
+- **転送ゼロコピー化**: flutter_onnxruntime の Web 実装が 1 要素ずつの
+  interop 変換でボトルネックだったため、vendored パッチで一括変換に修正
+  （`app/third_party/flutter_onnxruntime/README.local.md`）。
+- **パイプライン化+ボックス外挿**: マスク合成/デコードは次フレームの推論と
+  並行実行。枠はベクタ描画で、検出間は直近 2 検出からの線形外挿で 33ms ごと
+  に追従更新（上限 300ms）。
 - **WebGPU 実行プロバイダ**（既定）: 非対応ブラウザでは ort-web が自動で wasm にフォールバック。
+- **WebNN（実験・要ブラウザフラグ）**: chrome://flags で WebNN を有効化して
+  メニューから選択。ネイティブ ML ランタイム（Windows は DirectML）直結のため
+  WebGPU 比 3〜4 倍速い。将来ブラウザ既定有効になれば昇格予定。
 - **マルチスレッド WASM**: GitHub Pages はヘッダを付与できないため
   `web/coi-serviceworker.js` が COOP/COEP を注入して SharedArrayBuffer を有効化
   （初回アクセス時に 1 回自動リロード。Flutter の SW と衝突するためビルドは
@@ -129,10 +141,14 @@ docker compose up --build web                    # = make up
 - **int8 量子化モデル**（43MB→12MB）: `make rtmdet-onnx` 後に
   `python model/rtmdet/quantize_int8.py` で生成。感度の高い層
   （SE-attention / backbone stage2.1 blocks.0）は除外済み。
-- **右上 🎛 メニュー**で fp32/GPU・fp32/CPU・int8/CPU を実行中に切替可能
-  （int8×GPU は ort-web の WebGPU が per-channel DequantizeLinear 未対応のため提供しない）。
-  ステータスチップ左端に実行中モードを常時表示（例: `fp32/GPU`、
+- **右上 🎛 メニュー**で fp32/GPU・fp32/WebNN・fp32/CPU・int8/CPU を実行中に切替可能
+  （int8×GPU は ort-web の WebGPU が per-channel DequantizeLinear 未対応のため提供しない。
+  fp16×WebGPU は速度向上がなく box 座標が壊れるため非提供、変換スクリプトのみ
+  `model/rtmdet/convert_fp16.py` に残置）。
+  ステータスチップ左端に実行中モードを常時表示（例: `fp32/WebNN`、
   フォールバック時は `fp32/GPU→CPU×8`）。
+
+Android は NNAPI（fp16 許可）→ XNNPACK（4 スレッド）→ CPU の優先割り当て。
 
 さらに下げたい場合は入力解像度を落として再エクスポート
 （`export_rtmdet.sh` の `SIZE` と `Detector(inputSize:)` を一致させる）。

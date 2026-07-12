@@ -13,6 +13,7 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtException
 import ai.onnxruntime.OrtLoggingLevel
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.providers.NNAPIFlags
 import ai.onnxruntime.providers.OrtTensorRTProviderOptions
 import android.util.Log
 import androidx.annotation.NonNull
@@ -273,7 +274,9 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 ortSessionOptions.addDnnl(useArena)
                             }
                             "NNAPI" -> {
-                                ortSessionOptions.addNnapi()
+                                // LOCAL PATCH: fp16 実行を許可（GPU/NPU の実効速度が
+                                // 大きく向上。精度低下は fp16 丸め程度）
+                                ortSessionOptions.addNnapi(java.util.EnumSet.of(NNAPIFlags.USE_FP16))
                             }
                             "OPEN_VINO" -> {
                                 ortSessionOptions.addOpenVINO(deviceId.toString())
@@ -288,8 +291,15 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 ortSessionOptions.addTensorrt(OrtTensorRTProviderOptions(deviceId))
                             }
                             "XNNPACK" -> {
-                                // use an empty map as the parameter
-                                ortSessionOptions.addXnnpack(mapOf())
+                                // LOCAL PATCH: XNNPACK は独自スレッドプールを持ち、
+                                // 未指定だと 1 スレッドで CPU EP より遅くなる。
+                                // セッションの intraOpNumThreads 指定を引き継ぐ。
+                                val xnnThreads = if (sessionOptions.containsKey("intraOpNumThreads")) {
+                                    (sessionOptions["intraOpNumThreads"] as Number).toInt()
+                                } else {
+                                    4
+                                }
+                                ortSessionOptions.addXnnpack(mapOf("intra_op_num_threads" to xnnThreads.toString()))
                             }
                             else -> {
                                 result.error("INVALID_PROVIDER", "Provider $provider is not supported", null)

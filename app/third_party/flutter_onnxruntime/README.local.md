@@ -14,9 +14,18 @@ Web 実装の Dart⇔JS TypedArray 変換が 1 要素ずつの interop 呼び出
   場合は `.toJS` で直接 JS TypedArray 化（中間 JS Array を作らない）
 - `getOrtValueData`: float32/int32/uint8 テンソルは
   `(jsData as JSFloat32Array).toDart` 等で一括変換
+- `createJsSessionOptions`: WEB_NN は文字列 `'webnn'` だと deviceType が
+  既定 `'cpu'` になるため、`{name: 'webnn', deviceType: 'gpu'}` を渡す
 
 int64（labels、要素数が少ない）と bool/string は元実装のまま。
-Android などネイティブ実装には変更なし。
+
+## パッチ内容（android/.../FlutterOnnxruntimePlugin.kt）
+
+- `NNAPI`: `addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))` — fp16 実行を許可
+  （GPU/NPU の実効スループット向上）
+- `XNNPACK`: 独自スレッドプールが未指定だと 1 スレッドになり CPU EP より
+  遅くなるため、セッションの `intraOpNumThreads` を
+  `intra_op_num_threads` として引き継ぐ（未指定時 4）
 
 ## 更新時の注意
 

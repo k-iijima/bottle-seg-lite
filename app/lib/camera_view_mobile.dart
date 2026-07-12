@@ -26,8 +26,9 @@ class CameraSegView extends StatefulWidget {
 class _CameraSegViewState extends State<CameraSegView> {
   final Detector _detector = Detector(inputSize: 320);
 
-  /// 推論の最小間隔（発熱・GC 圧の抑制）。
-  static const Duration _minInterval = Duration(milliseconds: 150);
+  /// 推論の最小間隔（発熱・GC 圧の抑制）。NNAPI/XNNPACK 有効化に合わせて
+  /// 150ms→66ms（~15fps 上限）に緩和。発熱が問題になれば戻す。
+  static const Duration _minInterval = Duration(milliseconds: 66);
 
   CameraController? _controller;
   ui.Image? _mask;

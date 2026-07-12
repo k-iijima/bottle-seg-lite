@@ -10,10 +10,16 @@ import 'package:flutter/material.dart';
 /// 論理的にはフレーム全体を表しているため、論理アスペクトで cover クロップして
 /// からピクセル座標に写像することでプレビューと正確に一致する。
 class MaskPainter extends CustomPainter {
-  MaskPainter(this.mask, {this.srcAspect = 1.0});
+  MaskPainter(this.mask, {this.srcAspect = 1.0, this.boxes = const [],
+      this.palette = const []});
 
   final ui.Image mask;
   final double srcAspect;
+
+  /// マスク画像と同じピクセル座標系のボックス（Web: 検出間は外挿で更新される）。
+  /// モバイルはオーバーレイに焼き込むため空。
+  final List<({Rect rect, int cls})> boxes;
+  final List<Color> palette;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -32,6 +38,26 @@ class MaskPainter extends CustomPainter {
       dst,
       Paint()..filterQuality = FilterQuality.low,
     );
+
+    if (boxes.isEmpty) return;
+    // マスクと同じ srcPx→dst 変換でボックスを描く
+    final double kx = dst.width / srcPx.width;
+    final double ky = dst.height / srcPx.height;
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    for (final b in boxes) {
+      stroke.color = b.cls < palette.length ? palette[b.cls] : Colors.white;
+      canvas.drawRect(
+        Rect.fromLTRB(
+          (b.rect.left - srcPx.left) * kx,
+          (b.rect.top - srcPx.top) * ky,
+          (b.rect.right - srcPx.left) * kx,
+          (b.rect.bottom - srcPx.top) * ky,
+        ),
+        stroke,
+      );
+    }
   }
 
   /// src を dst のアスペクト比に合わせて中央クロップする。
@@ -52,7 +78,9 @@ class MaskPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(MaskPainter oldDelegate) =>
-      oldDelegate.mask != mask || oldDelegate.srcAspect != srcAspect;
+      oldDelegate.mask != mask ||
+      oldDelegate.srcAspect != srcAspect ||
+      oldDelegate.boxes != boxes;
 }
 
 class StatusChip extends StatelessWidget {

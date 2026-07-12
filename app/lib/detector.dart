@@ -1,7 +1,40 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+
+/// 1 検出。座標はモデル入力解像度のピクセル座標。
+class Detection {
+  Detection({
+    required this.cls,
+    required this.score,
+    required this.rect,
+    required this.srcIndex,
+  });
+
+  final int cls;
+  final double score;
+  final ui.Rect rect;
+
+  /// dets/masks テンソル内の元インデックス（マスク参照用）。
+  final int srcIndex;
+
+  ui.Offset get center => rect.center;
+}
+
+/// runRaw() の結果。masks は [K, S, S] のフラット列（検出過多時は null）。
+class InferResult {
+  InferResult({
+    required this.detections,
+    required this.masks,
+    required this.inputSize,
+  });
+
+  final List<Detection> detections;
+  final List<num>? masks;
+  final int inputSize;
+}
 
 /// RTMDet-Ins (mmdeploy export) を実行し、インスタンスマスク+枠の RGBA
 /// オーバーレイを生成する。
@@ -23,15 +56,16 @@ class Detector {
   final int inputSize;
   final double scoreThreshold;
 
-  /// 切替可能なモデル（int8 は make rtmdet-onnx 後に quantize_int8.py で生成）。
+  /// 切替可能なモデル（int8 は quantize_int8.py、fp16 は convert_fp16.py で生成）。
   static const String fp32Asset = 'assets/models/rtmdet_ins.onnx';
+  static const String fp16Asset = 'assets/models/rtmdet_ins_fp16.onnx';
   static const String int8Asset = 'assets/models/rtmdet_ins_int8.onnx';
 
   static const String _inputName = 'input';
 
-  static const int _fillAlpha = 110;
+  static const int fillAlpha = 110;
   // クラス色: bottle / cap / label
-  static const List<List<int>> _colors = [
+  static const List<List<int>> colors = [
     [235, 64, 64], // bottle: 赤
     [64, 144, 255], // cap: 青
     [64, 220, 120], // label: 緑
@@ -44,13 +78,13 @@ class Detector {
   /// 直近フレームの検出数（クラス別）。UI 表示用。
   List<int> lastCounts = [0, 0, 0];
 
-  /// 直近 run() のステージ別所要時間 [ms]。ボトルネック特定用。
+  /// 直近のステージ別所要時間 [ms]。ボトルネック特定用。
   /// ten=入力テンソル生成 / run=session.run /
   /// dets=dets+labels 転送 / masks=masks 転送 / ovl=オーバーレイ合成
   final Map<String, int> lastStageMs = <String, int>{};
 
   /// 検出数がこれを超えるフレームはマスク転送をスキップして枠のみ描画する
-  /// （masks テンソルの platform channel 転送が支配的コストのため）。
+  /// （masks テンソルの転送コスト抑制）。
   static const int _maskFetchLimit = 15;
 
   Future<void> init() async {
@@ -61,7 +95,13 @@ class Detector {
   ///
   /// [preferGpu] は Web のみ有効: WebGPU を優先し、非対応環境では ort-web が
   /// 自動で wasm にフォールバックする。false なら wasm（CPU）固定。
-  Future<void> load({required String modelAsset, bool preferGpu = true}) async {
+  /// [webNn] は実験用: WebNN (deviceType=gpu) を優先する（要ブラウザフラグ。
+  /// navigator.ml がなければ wasm にフォールバック）。
+  Future<void> load({
+    required String modelAsset,
+    bool preferGpu = true,
+    bool webNn = false,
+  }) async {
     final ort = _ort ??= OnnxRuntime();
     final old = _session;
     _session = null;
@@ -70,27 +110,36 @@ class Detector {
       // Web ではプラグインがパスをそのまま ort-web の fetch に渡すため、
       // Flutter web の実配信パス（assets/<アセットキー>）を明示する必要がある。
       final options = OrtSessionOptions(
-        providers: preferGpu
-            ? [OrtProvider.WEB_GPU, OrtProvider.WEB_ASSEMBLY]
-            : [OrtProvider.WEB_ASSEMBLY],
+        providers: webNn
+            ? [OrtProvider.WEB_NN, OrtProvider.WEB_ASSEMBLY]
+            : preferGpu
+                ? [OrtProvider.WEB_GPU, OrtProvider.WEB_ASSEMBLY]
+                : [OrtProvider.WEB_ASSEMBLY],
       );
       _session = await ort.createSession('assets/$modelAsset', options: options);
     } else {
-      _session = await ort.createSessionFromAsset(modelAsset);
+      // Android: NNAPI（GPU/DSP/NPU へ委譲、fp16 実行許可はプラグイン側で設定）
+      // → XNNPACK（SIMD 最適化 CPU）→ CPU の優先順。NNAPI が扱えない op
+      // （NMS 等の後処理）は自動的に後続プロバイダへ割り当てられる。
+      final options = OrtSessionOptions(
+        providers: preferGpu
+            ? [OrtProvider.NNAPI, OrtProvider.XNNPACK, OrtProvider.CPU]
+            : [OrtProvider.XNNPACK, OrtProvider.CPU],
+        intraOpNumThreads: 4,
+      );
+      _session = await ort.createSessionFromAsset(modelAsset, options: options);
     }
   }
 
+  /// 推論のみ実行し、検出リストとマスク生データを返す（オーバーレイ合成なし）。
   /// [rgba] は inputSize×inputSize の RGBA バッファ（呼び出し側でリサイズ済み）。
-  /// 戻り値: 同解像度の RGBA オーバーレイ（背景透明、マスク塗り+枠線）。
-  Future<Uint8List> run(Uint8List rgba) async {
+  Future<InferResult> runRaw(Uint8List rgba) async {
     final session = _session;
     if (session == null) {
       throw StateError('Detector not initialized');
     }
 
     final int s = inputSize;
-    final int plane = s * s;
-
     final sw = Stopwatch()..start();
 
     // 前処理（RGBA→BGR・正規化）はモデル内蔵。RGBA バッファを直渡しする。
@@ -111,54 +160,37 @@ class Detector {
 
       final int k = labels.length;
       // 閾値を超える検出（スコア降順で並んでいる）
-      final accepted = <int>[];
+      final detections = <Detection>[];
+      final counts = [0, 0, 0];
       for (int i = 0; i < k; i++) {
-        if (dets[i * 5 + 4].toDouble() < scoreThreshold) continue;
+        final double score = dets[i * 5 + 4].toDouble();
+        if (score < scoreThreshold) continue;
         final int cls = labels[i].toInt();
-        if (cls < 0 || cls >= _colors.length) continue;
-        accepted.add(i);
+        if (cls < 0 || cls >= colors.length) continue;
+        counts[cls]++;
+        detections.add(Detection(
+          cls: cls,
+          score: score,
+          rect: ui.Rect.fromLTRB(
+            dets[i * 5].toDouble().clamp(0, s - 1),
+            dets[i * 5 + 1].toDouble().clamp(0, s - 1),
+            dets[i * 5 + 2].toDouble().clamp(0, s - 1),
+            dets[i * 5 + 3].toDouble().clamp(0, s - 1),
+          ),
+          srcIndex: i,
+        ));
       }
+      lastCounts = counts;
 
       // 密集シーンではマスク転送（支配的コスト）をスキップし枠のみ描画
       sw.reset();
       List<num>? masks;
-      if (accepted.length <= _maskFetchLimit) {
+      if (detections.length <= _maskFetchLimit) {
         masks = (await outputs['masks']!.asFlattenedList()).cast<num>();
       }
       lastStageMs['masks'] = sw.elapsedMilliseconds;
 
-      sw.reset();
-      final overlay = Uint8List(plane * 4); // 透明で初期化
-      final counts = [0, 0, 0];
-
-      for (final i in accepted) {
-        final int cls = labels[i].toInt();
-        counts[cls]++;
-        final color = _colors[cls];
-
-        if (masks != null) {
-          final int mOff = i * plane;
-          for (int p = 0; p < plane; p++) {
-            if (masks[mOff + p].toDouble() < 0.5) continue;
-            final int o = p * 4;
-            // 既に塗られていたら上書きしない（先勝ち=スコア降順）
-            if (overlay[o + 3] != 0) continue;
-            overlay[o] = color[0];
-            overlay[o + 1] = color[1];
-            overlay[o + 2] = color[2];
-            overlay[o + 3] = _fillAlpha;
-          }
-        }
-
-        final int x1 = dets[i * 5].toDouble().clamp(0, s - 1).toInt();
-        final int y1 = dets[i * 5 + 1].toDouble().clamp(0, s - 1).toInt();
-        final int x2 = dets[i * 5 + 2].toDouble().clamp(0, s - 1).toInt();
-        final int y2 = dets[i * 5 + 3].toDouble().clamp(0, s - 1).toInt();
-        _drawRect(overlay, s, x1, y1, x2, y2, color);
-      }
-      lastStageMs['ovl'] = sw.elapsedMilliseconds;
-      lastCounts = counts;
-      return overlay;
+      return InferResult(detections: detections, masks: masks, inputSize: s);
     } finally {
       await inputTensor.dispose();
       if (outputs != null) {
@@ -167,6 +199,47 @@ class Detector {
         }
       }
     }
+  }
+
+  /// マスク塗りのみの RGBA オーバーレイを合成する（枠は含まない。
+  /// Web は枠を CustomPaint 側でベクタ描画し、検出間はボックス外挿する）。
+  Uint8List composeMasks(InferResult r) {
+    final int s = r.inputSize;
+    final int plane = s * s;
+    final sw = Stopwatch()..start();
+    final overlay = Uint8List(plane * 4); // 透明で初期化
+
+    final masks = r.masks;
+    if (masks != null) {
+      for (final d in r.detections) {
+        final color = colors[d.cls];
+        final int mOff = d.srcIndex * plane;
+        for (int p = 0; p < plane; p++) {
+          if (masks[mOff + p].toDouble() < 0.5) continue;
+          final int o = p * 4;
+          // 既に塗られていたら上書きしない（先勝ち=スコア降順）
+          if (overlay[o + 3] != 0) continue;
+          overlay[o] = color[0];
+          overlay[o + 1] = color[1];
+          overlay[o + 2] = color[2];
+          overlay[o + 3] = fillAlpha;
+        }
+      }
+    }
+    lastStageMs['ovl'] = sw.elapsedMilliseconds;
+    return overlay;
+  }
+
+  /// 旧 API（mobile 用）: マスク+枠入りオーバーレイを一括生成する。
+  Future<Uint8List> run(Uint8List rgba) async {
+    final r = await runRaw(rgba);
+    final overlay = composeMasks(r);
+    final int s = r.inputSize;
+    for (final d in r.detections) {
+      _drawRect(overlay, s, d.rect.left.toInt(), d.rect.top.toInt(),
+          d.rect.right.toInt(), d.rect.bottom.toInt(), colors[d.cls]);
+    }
+    return overlay;
   }
 
   void _drawRect(
