@@ -1,4 +1,4 @@
-# bottle-seg-lite — だいたいのボトルを検出セグメンテーションするモデル
+# bottle-seg-lite — だいたいのボトルをざっくり検出セグメンテーションするモデル
 
 カメラ映像に ONNX モデルの検出・セグメンテーション結果をリアルタイム重畳する
 **Flutter（Web / Android）** アプリと、その自作モデル（RTMDet-Ins-s、bottle/cap/label 3クラス）の
@@ -129,8 +129,10 @@ docker compose up --build web                    # = make up
 - **int8 量子化モデル**（43MB→12MB）: `make rtmdet-onnx` 後に
   `python model/rtmdet/quantize_int8.py` で生成。感度の高い層
   （SE-attention / backbone stage2.1 blocks.0）は除外済み。
-- **右上 🎛 メニュー**で fp32/int8 × GPU/CPU を実行中に切替可能
-  （ステータスチップの ms/fps で比較できる）。
+- **右上 🎛 メニュー**で fp32/GPU・fp32/CPU・int8/CPU を実行中に切替可能
+  （int8×GPU は ort-web の WebGPU が per-channel DequantizeLinear 未対応のため提供しない）。
+  ステータスチップ左端に実行中モードを常時表示（例: `fp32/GPU`、
+  フォールバック時は `fp32/GPU→CPU×8`）。
 
 さらに下げたい場合は入力解像度を落として再エクスポート
 （`export_rtmdet.sh` の `SIZE` と `Detector(inputSize:)` を一致させる）。
