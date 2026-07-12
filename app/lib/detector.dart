@@ -22,7 +22,10 @@ class Detector {
   final int inputSize;
   final double scoreThreshold;
 
-  static const String _assetPath = 'assets/models/rtmdet_ins.onnx';
+  /// 切替可能なモデル（int8 は make rtmdet-onnx 後に quantize_int8.py で生成）。
+  static const String fp32Asset = 'assets/models/rtmdet_ins.onnx';
+  static const String int8Asset = 'assets/models/rtmdet_ins_int8.onnx';
+
   static const String _inputName = 'input';
 
   // RTMDet の data_preprocessor と同値（BGR 順、bgr_to_rgb=False）。
@@ -49,13 +52,29 @@ class Detector {
   static const int _maskFetchLimit = 15;
 
   Future<void> init() async {
-    _ort = OnnxRuntime();
+    await load(modelAsset: fp32Asset, preferGpu: true);
+  }
+
+  /// モデル・実行プロバイダを（再）ロードする。実行中のセッションは閉じる。
+  ///
+  /// [preferGpu] は Web のみ有効: WebGPU を優先し、非対応環境では ort-web が
+  /// 自動で wasm にフォールバックする。false なら wasm（CPU）固定。
+  Future<void> load({required String modelAsset, bool preferGpu = true}) async {
+    final ort = _ort ??= OnnxRuntime();
+    final old = _session;
+    _session = null;
+    await old?.close();
     if (kIsWeb) {
       // Web ではプラグインがパスをそのまま ort-web の fetch に渡すため、
       // Flutter web の実配信パス（assets/<アセットキー>）を明示する必要がある。
-      _session = await _ort!.createSession('assets/$_assetPath');
+      final options = OrtSessionOptions(
+        providers: preferGpu
+            ? [OrtProvider.WEB_GPU, OrtProvider.WEB_ASSEMBLY]
+            : [OrtProvider.WEB_ASSEMBLY],
+      );
+      _session = await ort.createSession('assets/$modelAsset', options: options);
     } else {
-      _session = await _ort!.createSessionFromAsset(_assetPath);
+      _session = await ort.createSessionFromAsset(modelAsset);
     }
   }
 

@@ -26,4 +26,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/models/rtmdet_ins.onnx
+    # ディレクトリ指定: rtmdet_ins.onnx（必須）+ rtmdet_ins_int8.onnx（任意、
+    # あれば Web の切替メニューで int8 が使える）をビルド時にあるだけ同梱する
+    - assets/models/

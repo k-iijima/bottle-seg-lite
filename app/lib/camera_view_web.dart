@@ -35,6 +35,15 @@ class _CameraSegViewState extends State<CameraSegView> {
   List<({String id, String label})> _cameras = const [];
   String? _currentCameraId;
 
+  /// モデル×実行方式の切替候補（GPU=WebGPU 優先・非対応時は wasm に自動フォールバック）。
+  static const List<({String label, String asset, bool gpu})> _inferConfigs = [
+    (label: 'fp32 / GPU', asset: Detector.fp32Asset, gpu: true),
+    (label: 'fp32 / CPU', asset: Detector.fp32Asset, gpu: false),
+    (label: 'int8 / GPU', asset: Detector.int8Asset, gpu: true),
+    (label: 'int8 / CPU', asset: Detector.int8Asset, gpu: false),
+  ];
+  int _configIndex = 0;
+
   /// 前回選んだカメラを次回も使うための localStorage キー。
   /// ブラウザ既定が仮想カメラ等で黒映像になる環境への対策。
   static const String _cameraPrefKey = 'camera_device_id';
@@ -150,6 +159,30 @@ class _CameraSegViewState extends State<CameraSegView> {
     if (!_disposed) setState(() => _cameras = cams);
   }
 
+  Future<void> _switchConfig(int index) async {
+    if (index == _configIndex) return;
+    final prev = _configIndex;
+    final c = _inferConfigs[index];
+    setState(() => _configIndex = index);
+    _setStatus('Loading model… (${c.label})');
+    // 実行中の推論が終わるのを待ってからセッションを差し替える
+    while (_running) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    try {
+      await _detector.load(modelAsset: c.asset, preferGpu: c.gpu);
+      _setStatus('Running (${c.label})');
+    } catch (e) {
+      final p = _inferConfigs[prev];
+      setState(() => _configIndex = prev);
+      _setStatus('Switch failed → ${p.label}: '
+          '${e.toString().substring(0, e.toString().length.clamp(0, 80))}');
+      try {
+        await _detector.load(modelAsset: p.asset, preferGpu: p.gpu);
+      } catch (_) {}
+    }
+  }
+
   Future<void> _switchCamera(String deviceId) async {
     if (deviceId == _currentCameraId) return;
     final prev = _currentCameraId;
@@ -170,7 +203,10 @@ class _CameraSegViewState extends State<CameraSegView> {
 
   Future<void> _loop() async {
     while (!_disposed) {
-      if (!_running && _video.readyState >= 2 && _video.videoWidth > 0) {
+      if (!_running &&
+          _detector.isReady &&
+          _video.readyState >= 2 &&
+          _video.videoWidth > 0) {
         _running = true;
         try {
           final started = DateTime.now();
@@ -263,33 +299,55 @@ class _CameraSegViewState extends State<CameraSegView> {
           top: 12,
           child: StatusChip(status: _status, inferMs: _lastInferMs, fps: _fps),
         ),
-        if (_cameras.isNotEmpty)
-          Positioned(
-            right: 12,
-            top: 12,
-            child: PopupMenuButton<String>(
-              tooltip: 'カメラ切替',
-              onSelected: _switchCamera,
-              itemBuilder: (_) => [
-                for (final c in _cameras)
-                  CheckedPopupMenuItem<String>(
-                    value: c.id,
-                    checked: c.id == _currentCameraId,
-                    child: Text(c.label, overflow: TextOverflow.ellipsis),
-                  ),
-              ],
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.cameraswitch,
-                    color: Colors.white, size: 20),
+        Positioned(
+          right: 12,
+          top: 12,
+          child: Row(
+            children: [
+              PopupMenuButton<int>(
+                tooltip: 'モデル/実行方式',
+                onSelected: _switchConfig,
+                itemBuilder: (_) => [
+                  for (var i = 0; i < _inferConfigs.length; i++)
+                    CheckedPopupMenuItem<int>(
+                      value: i,
+                      checked: i == _configIndex,
+                      child: Text(_inferConfigs[i].label),
+                    ),
+                ],
+                child: _chipButton(Icons.tune),
               ),
-            ),
+              if (_cameras.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  tooltip: 'カメラ切替',
+                  onSelected: _switchCamera,
+                  itemBuilder: (_) => [
+                    for (final c in _cameras)
+                      CheckedPopupMenuItem<String>(
+                        value: c.id,
+                        checked: c.id == _currentCameraId,
+                        child: Text(c.label, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  child: _chipButton(Icons.cameraswitch),
+                ),
+              ],
+            ],
           ),
+        ),
       ],
+    );
+  }
+
+  Widget _chipButton(IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, color: Colors.white, size: 20),
     );
   }
 }

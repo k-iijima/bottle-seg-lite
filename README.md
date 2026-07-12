@@ -117,13 +117,20 @@ docker compose up --build web                    # = make up
    再エクスポートは `make rtmdet-onnx`）。
 3. クラス数・配色・スコア閾値が違う場合は `detector.dart` を調整。
 
-## パフォーマンス改善メモ
+## パフォーマンス（Web）
 
-WASM の単一スレッド実行だと UI スレッドにジャンクが出ることがあります（ネイティブ `<video>` 自体は
-止まりません）。高速化したい場合:
+以下は実装済み:
 
-- **マルチスレッド WASM**: 配信サーバで以下のヘッダを付与（SharedArrayBuffer 有効化）:
-  `Cross-Origin-Opener-Policy: same-origin` / `Cross-Origin-Embedder-Policy: require-corp`
-- **WebGPU EP**: `onnxruntime-web` の WebGPU 実行プロバイダを利用（対応ブラウザ）。
-- 入力解像度を下げる（`Detector(inputSize: 320)` など。エクスポート解像度と一致させること）。
-```
+- **WebGPU 実行プロバイダ**（既定）: 非対応ブラウザでは ort-web が自動で wasm にフォールバック。
+- **マルチスレッド WASM**: GitHub Pages はヘッダを付与できないため
+  `web/coi-serviceworker.js` が COOP/COEP を注入して SharedArrayBuffer を有効化
+  （初回アクセス時に 1 回自動リロード。Flutter の SW と衝突するためビルドは
+  `--pwa-strategy none`）。
+- **int8 量子化モデル**（43MB→12MB）: `make rtmdet-onnx` 後に
+  `python model/rtmdet/quantize_int8.py` で生成。感度の高い層
+  （SE-attention / backbone stage2.1 blocks.0）は除外済み。
+- **右上 🎛 メニュー**で fp32/int8 × GPU/CPU を実行中に切替可能
+  （ステータスチップの ms/fps で比較できる）。
+
+さらに下げたい場合は入力解像度を落として再エクスポート
+（`export_rtmdet.sh` の `SIZE` と `Detector(inputSize:)` を一致させる）。

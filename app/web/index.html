@@ -16,10 +16,27 @@
   <link rel="manifest" href="manifest.json">
 
   <!--
+    coi-serviceworker: GitHub Pages では COOP/COEP ヘッダを付けられないため、
+    Service Worker でヘッダを注入して crossOriginIsolated にする
+    （SharedArrayBuffer が有効になり ort-web の wasm がマルチスレッドで動く）。
+    初回アクセス時のみ SW 登録のため 1 回自動リロードされる。
+    ※ Flutter 側の Service Worker とスコープが衝突するので、ビルドは
+       --pwa-strategy none 必須（deploy-pages.yml / entrypoint.sh 参照）。
+  -->
+  <script src="coi-serviceworker.js"></script>
+
+  <!--
     onnxruntime-web. flutter_onnxruntime uses the global `ort` provided by this
     script on the web platform. Keep the version in sync with the plugin.
+    ort.min.js は WebGPU EP 同梱（executionProviders で指定して使う）。
   -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js"></script>
+  <script>
+    // crossOriginIsolated のとき wasm をマルチスレッド化（既定は控えめなため明示）
+    if (self.crossOriginIsolated && self.ort) {
+      ort.env.wasm.numThreads = Math.min(8, navigator.hardwareConcurrency || 4);
+    }
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
