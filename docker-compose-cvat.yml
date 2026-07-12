@@ -1,0 +1,295 @@
+name: cvat
+
+x-backend-env: &backend-env
+  CVAT_POSTGRES_HOST: cvat_db
+  CVAT_REDIS_INMEM_HOST: cvat_redis_inmem
+  CVAT_REDIS_INMEM_PORT: 6379
+  CVAT_REDIS_ONDISK_HOST: cvat_redis_ondisk
+  CVAT_REDIS_ONDISK_PORT: 6666
+  CVAT_LOG_IMPORT_ERRORS: 'true'
+  CVAT_ALLOW_STATIC_CACHE: '${CVAT_ALLOW_STATIC_CACHE:-no}'
+  CVAT_DEFAULT_BACKING_CS_ID: '${CVAT_DEFAULT_BACKING_CS_ID:-}'
+  CVAT_NUM_PROXIES: '${CVAT_NUM_PROXIES:-1}'
+  CVAT_HEALTH_DISK_USAGE_MAX: '${CVAT_HEALTH_DISK_USAGE_MAX:-90}'
+  SMOKESCREEN_OPTS: '${SMOKESCREEN_OPTS:-}'
+  no_proxy: 'clickhouse,grafana,vector,nuclio,opa,${no_proxy:-}'
+
+x-backend-deps: &backend-deps
+  cvat_redis_inmem:
+    condition: service_started
+  cvat_redis_ondisk:
+    condition: service_started
+  cvat_db:
+    condition: service_started
+
+x-cvat-server-image: &cvat-server-image
+  image: cvat/server-local:${CVAT_VERSION:-v2.68.0}
+  build:
+    context: ./docker/cvat
+    dockerfile: Dockerfile
+    args:
+      CVAT_VERSION: ${CVAT_VERSION:-v2.68.0}
+
+x-cvat-backend-volumes: &cvat-backend-volumes
+  - cvat_data:/home/django/data
+  - cvat_keys:/home/django/keys
+  - cvat_logs:/home/django/logs
+  - ./share:/home/django/share:ro
+
+services:
+  cvat_db:
+    container_name: cvat_db
+    image: postgres:${POSTGRES_VERSION:-15-alpine}
+    restart: always
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_DB: cvat
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - cvat_db:/var/lib/postgresql/data
+    networks:
+      - cvat
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d cvat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  cvat_redis_inmem:
+    container_name: cvat_redis_inmem
+    image: redis:${REDIS_VERSION:-7.2.11-alpine}
+    restart: always
+    command:
+      - redis-server
+      - --save
+      - '60'
+      - '100'
+      - --appendonly
+      - 'yes'
+    volumes:
+      - cvat_inmem_db:/data
+    networks:
+      - cvat
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  cvat_redis_ondisk:
+    container_name: cvat_redis_ondisk
+    image: apache/kvrocks:${KVROCKS_VERSION:-2.15.0}
+    restart: always
+    init: true
+    command:
+      - --compact-cron
+      - '0 3 * * *'
+    volumes:
+      - cvat_cache_db:/var/lib/kvrocks
+    networks:
+      - cvat
+
+  cvat_server:
+    <<: *cvat-server-image
+    container_name: cvat_server
+    restart: always
+    depends_on:
+      <<: *backend-deps
+      cvat_opa:
+        condition: service_started
+    environment:
+      <<: *backend-env
+      DJANGO_MODWSGI_EXTRA_ARGS: ''
+      ALLOWED_HOSTS: '*'
+      ADAPTIVE_AUTO_ANNOTATION: 'false'
+      NUMPROCS: ${CVAT_SERVER_PROCESSES:-2}
+      CVAT_ANALYTICS: 0
+      CVAT_BASE_URL: 'http://${CVAT_HOST:-localhost}:${CVAT_PORT:-8080}'
+      ONE_RUNNING_JOB_IN_QUEUE_PER_USER: '${ONE_RUNNING_JOB_IN_QUEUE_PER_USER:-false}'
+    command: init run server nginx
+    labels:
+      traefik.enable: 'true'
+      traefik.http.services.cvat.loadbalancer.server.port: '8080'
+      traefik.http.routers.cvat.rule: 'Host(`${CVAT_HOST:-localhost}`) && (PathPrefix(`/api/`) || PathPrefix(`/static/`) || PathPrefix(`/admin`) || PathPrefix(`/django-rq`))'
+      traefik.http.routers.cvat.entrypoints: web
+    volumes: *cvat-backend-volumes
+    networks:
+      cvat:
+        aliases:
+          - cvat-server
+
+  cvat_worker_utils:
+    <<: *cvat-server-image
+    container_name: cvat_worker_utils
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      CVAT_REDIS_INMEM_PASSWORD: ''
+      NUMPROCS: 1
+    command: run worker notifications cleaning
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_worker_import:
+    <<: *cvat-server-image
+    container_name: cvat_worker_import
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      NUMPROCS: ${CVAT_WORKER_IMPORT_PROCESSES:-2}
+    command: run worker import
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_worker_export:
+    <<: *cvat-server-image
+    container_name: cvat_worker_export
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      NUMPROCS: ${CVAT_WORKER_EXPORT_PROCESSES:-2}
+    command: run worker export
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_worker_annotation:
+    <<: *cvat-server-image
+    container_name: cvat_worker_annotation
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      NUMPROCS: ${CVAT_WORKER_ANNOTATION_PROCESSES:-1}
+    command: run worker annotation
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_worker_webhooks:
+    <<: *cvat-server-image
+    container_name: cvat_worker_webhooks
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      NUMPROCS: ${CVAT_WORKER_WEBHOOKS_PROCESSES:-1}
+    command: run worker webhooks --with-scheduler
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_worker_quality_reports:
+    <<: *cvat-server-image
+    container_name: cvat_worker_quality_reports
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      NUMPROCS: ${CVAT_WORKER_QUALITY_REPORTS_PROCESSES:-1}
+    command: run worker quality_reports
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_worker_chunks:
+    <<: *cvat-server-image
+    container_name: cvat_worker_chunks
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      NUMPROCS: ${CVAT_WORKER_CHUNKS_PROCESSES:-2}
+    command: run worker chunks
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_worker_consensus:
+    <<: *cvat-server-image
+    container_name: cvat_worker_consensus
+    restart: always
+    depends_on: *backend-deps
+    environment:
+      <<: *backend-env
+      NUMPROCS: ${CVAT_WORKER_CONSENSUS_PROCESSES:-1}
+    command: run worker consensus
+    volumes: *cvat-backend-volumes
+    networks:
+      - cvat
+
+  cvat_ui:
+    container_name: cvat_ui
+    image: cvat/ui:${CVAT_VERSION:-v2.68.0}
+    restart: always
+    depends_on:
+      - cvat_server
+    labels:
+      traefik.enable: 'true'
+      traefik.http.services.cvat-ui.loadbalancer.server.port: '8000'
+      traefik.http.routers.cvat-ui.rule: 'Host(`${CVAT_HOST:-localhost}`)'
+      traefik.http.routers.cvat-ui.entrypoints: web
+    networks:
+      - cvat
+
+  traefik:
+    container_name: traefik
+    image: traefik:${TRAEFIK_VERSION:-v3.6}
+    restart: always
+    ports:
+      - '${CVAT_PORT:-8080}:8080'
+      - '8090:8090'
+    environment:
+      CVAT_HOST: ${CVAT_HOST:-localhost}
+      TRAEFIK_LOG_FORMAT: json
+      TRAEFIK_ACCESSLOG_FORMAT: json
+      TRAEFIK_ENTRYPOINTS_web_ADDRESS: ':8080'
+      TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT: 'false'
+      TRAEFIK_PROVIDERS_DOCKER_NETWORK: cvat
+      # Uncomment these two lines to enable Traefik dashboard on localhost:8090.
+      # TRAEFIK_API_DASHBOARD: 'true'
+      # TRAEFIK_ENTRYPOINTS_dashboard_ADDRESS: ':8090'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - cvat
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: '10'
+
+  cvat_opa:
+    container_name: cvat_opa
+    image: openpolicyagent/opa:${OPA_VERSION:-1.12.2}
+    restart: always
+    command:
+      - run
+      - --server
+      - --addr=:8181
+      - --log-level=error
+      - --set=services.cvat.url=http://cvat-server:8080
+      - --set=bundles.cvat.service=cvat
+      - --set=bundles.cvat.resource=/api/auth/rules
+      - --set=bundles.cvat.polling.min_delay_seconds=5
+      - --set=bundles.cvat.polling.max_delay_seconds=15
+    networks:
+      cvat:
+        aliases:
+          - opa
+
+volumes:
+  cvat_db:
+  cvat_data:
+  cvat_keys:
+  cvat_logs:
+  cvat_inmem_db:
+  cvat_cache_db:
+
+networks:
+  cvat:

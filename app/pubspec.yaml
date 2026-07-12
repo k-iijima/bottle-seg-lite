@@ -1,0 +1,29 @@
+name: realtime_seg
+description: Realtime bottle instance segmentation overlay (RTMDet-Ins, Flutter web + Android).
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # ONNX Runtime wrapper. Web では onnxruntime-web、Android ではネイティブ ORT を使う。
+  flutter_onnxruntime: ^1.8.0
+  # モバイルのカメラプレビュー + フレームストリーム。
+  camera: ^0.11.0
+  # モデルキャッシュ無効化（flutter_onnxruntime は temp コピーを再利用するため、
+  # モデル差し替え時に起動時削除が必要）。
+  path_provider: ^2.1.0
+  # Typed bindings for getUserMedia / <video> / <canvas> (dart:js_interop).
+  web: ^1.1.0
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/rtmdet_ins.onnx

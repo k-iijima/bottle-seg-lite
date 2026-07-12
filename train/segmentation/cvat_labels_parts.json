@@ -1,0 +1,30 @@
+[
+  {
+    "name": "bottle",
+    "type": "any",
+    "attributes": [
+      {"name": "material", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "pet", "glass", "can", "other"]},
+      {"name": "cap", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "capped", "uncapped"]},
+      {"name": "cap_color", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "none", "white", "black", "red", "blue", "green", "yellow", "orange", "silver", "transparent"]},
+      {"name": "label", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "labeled", "unlabeled"]},
+      {"name": "label_color", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "none", "white", "black", "red", "blue", "green", "yellow", "orange", "brown", "multicolor"]},
+      {"name": "fill_level", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "empty", "low", "half", "high", "full"]},
+      {"name": "crushed", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "intact", "crushed"]},
+      {"name": "visibility", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "full", "occluded"]},
+      {"name": "orientation", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "upright", "lying"]},
+      {"name": "depiction", "input_type": "select", "mutable": true, "default_value": "unknown",
+       "values": ["unknown", "real", "depicted"]}
+    ]
+  },
+  {"name": "cap", "type": "any", "attributes": []},
+  {"name": "label", "type": "any", "attributes": []}
+]

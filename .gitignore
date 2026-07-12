@@ -1,0 +1,40 @@
+# Secrets
+.env
+
+# Flutter
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/pubspec.lock
+app/.idea/
+*.iml
+
+# Models / artifacts (regenerate with `make model` / `make rtmdet-onnx`)
+app/assets/models/*.onnx
+app/assets/models/verify/
+
+# Training data & outputs (multi-GB, kept local only)
+train/segmentation/datasets/
+train/segmentation/work_pet_bottle/
+train/segmentation/mlruns/
+train/segmentation/runpod/.rp/
+train/segmentation/runpod/attrs/
+train/segmentation/runpod/parts/
+train/segmentation/runpod/refined/
+train/segmentation/runpod/*.tar
+train/segmentation/runpod/*.tar.gz
+train/segmentation/runpod/attrs_smoke_30b.json
+*.pth
+
+# Sample screenshots (local only)
+sample1_*.png
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Tools / OS
+.claude/
+.DS_Store

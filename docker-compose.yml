@@ -1,0 +1,73 @@
+services:
+  # One-off: export the ONNX segmentation model into app/assets/models/seg.onnx
+  # Run with: docker compose --profile tools run --rm model   (or: make model)
+  model:
+    build: ./model
+    profiles: ["tools"]
+    volumes:
+      - ./app/assets/models:/out
+
+  # One-off: 学習済み RTMDet-Ins-s を ONNX 化して app/assets/models/rtmdet_ins.onnx に出力。
+  # Run with: docker compose --profile tools run --rm rtmdet-onnx
+  rtmdet-onnx:
+    build: ./model/rtmdet
+    profiles: ["tools"]
+    gpus: all
+    volumes:
+      - ./train/segmentation:/train:ro
+      - ./model/rtmdet:/work:ro
+      - ./app/assets/models:/out
+    command: bash /work/export_rtmdet.sh
+
+  # One-off: SAM 3 で pet_bottle データセットの低品質 segmentation を再生成する（GPU 必須）。
+  # 動作確認:  docker compose --profile tools run --rm seg                     (= make seg-preview)
+  # 全件:      docker compose --profile tools run --rm seg python make_sam3_segmentation.py
+  seg:
+    build:
+      context: ./train/segmentation/docker
+    profiles: ["tools"]
+    gpus: all
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - HF_HOME=/hf_cache
+    volumes:
+      - ./train/segmentation:/work
+      - hf_cache:/hf_cache
+    working_dir: /work
+
+  # Flutter web dev server. Open http://localhost:8080 after it starts.
+  web:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./app:/app
+      - pub_cache:/root/.pub-cache
+    stdin_open: true
+    tty: true
+
+  # One-off: Android APK をビルド（Flutter+Android SDK 入りイメージ）。
+  # Run with: docker compose --profile tools run --rm apk
+  # 出力: app/build/app/outputs/flutter-apk/app-release.apk
+  apk:
+    image: ghcr.io/cirruslabs/flutter:stable
+    profiles: ["tools"]
+    volumes:
+      - ./app:/app
+      - pub_cache:/root/.pub-cache
+      - gradle_cache:/root/.gradle
+      - android_keys:/root/.android    # debug keystore を固定（毎回変わると再インストール不可になる）
+    working_dir: /app
+    command: >
+      bash -c "git config --global --add safe.directory /sdks/flutter &&
+               flutter create --platforms=android --org dev.local --project-name realtime_seg . &&
+               flutter pub get &&
+               flutter build apk --release"
+
+volumes:
+  pub_cache:
+  gradle_cache:
+  android_keys:
+  hf_cache:
