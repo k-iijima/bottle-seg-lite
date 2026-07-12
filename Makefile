@@ -1,9 +1,5 @@
-.PHONY: model rtmdet-onnx apk up logs down clean rebuild seg-build seg-preview seg \
+.PHONY: rtmdet-onnx apk up logs down clean rebuild seg-build seg-preview seg \
         cvat-up cvat-down cvat-logs cvat-superuser cvat-export
-
-# 1) Export the ONNX model (writes app/assets/models/seg.onnx). Run once.
-model:
-	docker compose --profile tools run --rm model
 
 # 学習済み RTMDet-Ins-s を ONNX 化（app/assets/models/rtmdet_ins.onnx、ローカル GPU 必須）
 rtmdet-onnx:
@@ -34,7 +30,8 @@ cvat-superuser:     # 初回のみ: 管理ユーザー作成
 cvat-export:        # COCO -> CVAT インポート zip（全 split, _sam3merge）を生成
 	docker compose --profile tools run --rm seg python export_coco_for_cvat.py
 
-# 2) Start the Flutter web dev server at http://localhost:8080
+# Start the Flutter web dev server at http://localhost:8080
+# (要 app/assets/models/rtmdet_ins.onnx — README「学習済みモデル」参照)
 up:
 	docker compose up --build web
 
@@ -48,7 +45,6 @@ down:
 rebuild:
 	docker compose build --no-cache web
 
-# Remove containers, volumes and the exported model
+# Remove containers and volumes
 clean:
 	docker compose down -v
-	rm -f app/assets/models/seg.onnx

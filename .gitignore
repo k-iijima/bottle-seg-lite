@@ -10,7 +10,7 @@ app/pubspec.lock
 app/.idea/
 *.iml
 
-# Models / artifacts (regenerate with `make model` / `make rtmdet-onnx`)
+# Models / artifacts (gh release download / `make rtmdet-onnx`)
 app/assets/models/*.onnx
 app/assets/models/verify/
 

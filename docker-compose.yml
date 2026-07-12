@@ -1,12 +1,4 @@
 services:
-  # One-off: export the ONNX segmentation model into app/assets/models/seg.onnx
-  # Run with: docker compose --profile tools run --rm model   (or: make model)
-  model:
-    build: ./model
-    profiles: ["tools"]
-    volumes:
-      - ./app/assets/models:/out
-
   # One-off: 学習済み RTMDet-Ins-s を ONNX 化して app/assets/models/rtmdet_ins.onnx に出力。
   # Run with: docker compose --profile tools run --rm rtmdet-onnx
   rtmdet-onnx:

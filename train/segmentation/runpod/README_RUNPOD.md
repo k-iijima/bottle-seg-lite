@@ -49,7 +49,8 @@ RTMDet-Ins-s を COCO 事前学習から 60 epoch ファインチューンする
   ローカル閲覧: 各 run の mlruns/ を `train/segmentation/mlruns/` に累積展開して
   `pip install mlflow && mlflow ui --backend-store-uri "file:train/segmentation/mlruns"`。
   run 名は `--cfg-options visualizer.vis_backends.1.run_name=<名前>` で指定推奨
-- 実績（2026-07-11、8×H100 60epoch）: **test bbox_mAP 0.376 / segm_mAP 0.352**。
+- 実績（2026-07-11、8×H100 60epoch）: **test bbox_mAP 0.376 / segm_mAP 0.352**
+  （対 SAM3 疑似ラベルの再現度。人手 GT ではない）。
   `GPUS=8 bash run_train.sh` で dist_train + NCCL 対策 + lr 自動設定まで面倒を見る。
 - **⚠️ lr は 2.5e-4 固定（run_train.sh の既定）**。公式 from-scratch 値 0.004 や 0.001 では
   train loss が正常のまま val が崩壊する（SyncBN running 統計が高 lr に追従できない。実測済み）。
@@ -72,8 +73,7 @@ scp -i runpod/.rp/id_rsa -P <PORT> root@<IP>:/workspace/train_outputs.tar.gz run
 ```
 
 > ⚠️ seed/転送は **ネイティブ scp を使う**（paramiko SFTP は速度劣化・二重起動事故の実績あり）。
-> 学習後の ONNX 化（アプリ deploy 用）は mmdeploy で別途 — `model/export_model.py` の
-> I/O 契約（'input'/'output'）に合わせる。
+> 学習後の ONNX 化（アプリ deploy 用）は mmdeploy で別途 — `make rtmdet-onnx`（model/rtmdet/）。
 
 ---
 

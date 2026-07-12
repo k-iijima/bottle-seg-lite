@@ -128,14 +128,16 @@ orientation / depiction(実物か絵・印刷か)`（各 unknown あり）。
       （[mmdet_configs/rtmdet-ins_s_pet_bottle.py](mmdet_configs/rtmdet-ins_s_pet_bottle.py)、パース検証済み）、
       RunPod H100 ランブック（[runpod/README_RUNPOD.md](runpod/README_RUNPOD.md) §0b）
 - [x] **RTMDet-Ins-s 学習** — 2026-07-11 完了（8×H100、60epoch、run 名 `h100x8_60e_lr2.5e-4`）。
-      **test: bbox_mAP 0.376 / segm_mAP 0.352**（val: 0.382 / 0.363、過学習なし）。
+      **test: bbox_mAP 0.376 / segm_mAP 0.352**（val: 0.382 / 0.363、過学習なし。
+      対 SAM3 疑似ラベルの再現度であり人手 GT ではない）。
       best ckpt: `work_pet_bottle/best_coco_segm_mAP_epoch_60.pth`、学習曲線: `mlruns/`
       （`mlflow ui --backend-store-uri "file:train/segmentation/mlruns"`）。
       ⚠️ 知見: COCO 事前学習からのファインチューンで lr>5e-4 は val 崩壊
       （train loss は正常のまま SyncBN running 統計が追従不能）→ **lr 2.5e-4 が正解**。
       8×H100 実行時の環境罠4件（NCCL NVLS / mmcv sm_90 / MLflow file store / iscrowd 欠落）は
       runpod/run_train.sh・setup_train.sh に対策済み
-- [ ] 学習済みモデルの ONNX 化（mmdeploy）→ アプリ組み込み（model/export_model.py の I/O 契約に合わせる）
+- [x] 学習済みモデルの ONNX 化（mmdeploy、`make rtmdet-onnx` → rtmdet_ins.onnx）→ アプリ組み込み・
+      Android 実機動作確認済み（2026-07-11。詳細は TRAINING_LOG.md §5-6）
 - [ ] 精度改善の候補: CVAT 検品の反映後に再学習 / rtmdet-ins_m へのスケールアップ / 入力解像度調整
 
 ## 6. CVATで見るには
