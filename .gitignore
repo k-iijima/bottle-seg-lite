@@ -40,3 +40,8 @@ __pycache__/
 # Tools / OS
 .claude/
 .DS_Store
+
+# 属性分類器の学習成果物・ログ（Release / TRAINING_LOG.md 参照）
+train/segmentation/work_attr/
+train/segmentation/attr_extract.log
+train/segmentation/train_mobilenet*.log

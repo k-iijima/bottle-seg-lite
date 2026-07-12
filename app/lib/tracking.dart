@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'attr_classifier.dart';
 import 'detector.dart';
 
 /// 追跡中の 1 ボトル。部位画像（capImg/labelImg）はビュー側が所有し、
@@ -20,6 +21,12 @@ class Track {
 
   ui.Image? capImg;
   ui.Image? labelImg;
+
+  /// 10属性のトラック内時間集約（属性分類器が有効な場合のみ更新）。
+  final AttrAggregate attrs = AttrAggregate();
+
+  /// 属性推論のレート制限用（トラックごとに間隔を空ける）。
+  DateTime lastAttrAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   void disposeImages() {
     capImg?.dispose();

@@ -8,6 +8,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
+import 'attr_classifier.dart';
 import 'detector.dart';
 import 'overlay_paint.dart';
 import 'tracking.dart';
@@ -32,6 +33,20 @@ class _CameraSegViewState extends State<CameraSegView> {
   late final web.HTMLCanvasElement _grabCanvas;
   late final web.CanvasRenderingContext2D _grabCtx;
   web.MediaStream? _stream;
+
+  // --- 属性分類器（2段目、トラック中のボトルのみ・低頻度） ---
+  final AttrClassifier _attrCls = AttrClassifier();
+  late final web.HTMLCanvasElement _attrCanvas;
+  late final web.CanvasRenderingContext2D _attrCtx;
+
+  /// 連続失敗がこの回数に達したら属性推論を止める（壊れたセッションで
+  /// エラーを撒き散らさないためのヒューズ。成功でリセット）。
+  int _attrFails = 0;
+  static const int _maxAttrFails = 5;
+
+  /// トラックあたりの属性推論の最小間隔。属性はほぼ静的なので低頻度でよい
+  /// （EMA 集約で安定させる。実行は検出ループと直列）。
+  static const Duration _attrInterval = Duration(milliseconds: 700);
 
   /// 選択可能なカメラ一覧（許可取得後に enumerateDevices で取得）。
   List<({String id, String label})> _cameras = const [];
@@ -165,6 +180,15 @@ class _CameraSegViewState extends State<CameraSegView> {
       {'willReadFrequently': true}.jsify(),
     ) as web.CanvasRenderingContext2D;
 
+    // 属性クロップ用（<video> の元解像度から直接切り出して 128×128 に squash）
+    _attrCanvas = web.HTMLCanvasElement()
+      ..width = AttrClassifier.inputSize
+      ..height = AttrClassifier.inputSize;
+    _attrCtx = _attrCanvas.getContext(
+      '2d',
+      {'willReadFrequently': true}.jsify(),
+    ) as web.CanvasRenderingContext2D;
+
     _video = web.HTMLVideoElement()
       ..autoplay = true
       ..muted = true
@@ -205,6 +229,13 @@ class _CameraSegViewState extends State<CameraSegView> {
     } catch (e) {
       _setStatus('Model load failed (did you export rtmdet_ins.onnx?): $e');
       return;
+    }
+
+    // 属性分類器はオプショナル: 失敗しても検出は動かす
+    try {
+      await _attrCls.init();
+    } catch (e) {
+      debugPrint('attr classifier unavailable: $e');
     }
 
     _setStatus('Running');
@@ -319,6 +350,11 @@ class _CameraSegViewState extends State<CameraSegView> {
           // 次フレームの推論に進む（_present 内は取得済みデータのみ使う
           // ため、セッション切替とも競合しない）
           unawaited(_present(res, rgba, started, grabMs));
+          // 属性推論は検出と**直列**に回す（ort-web は同一 wasm モジュール上の
+          // 並行 run() を許さず "Session already started" で死ぬ。unawaited 禁止）
+          if (_attrCls.isReady && _tracker.active && _attrFails < _maxAttrFails) {
+            await _updateTrackAttrs(res.detections);
+          }
         } catch (e) {
           // フレーム破棄でループ継続（原因はステータスに表示して可視化）
           _setStatus('ERR: ${e.toString().substring(0, e.toString().length.clamp(0, 120))}');
@@ -486,6 +522,74 @@ class _CameraSegViewState extends State<CameraSegView> {
     _tickBoxes();
   }
 
+  /// トラック中ボトルの属性を推定して EMA 集約に足し込む。
+  ///
+  /// クロップは 320 入力ではなく <video> の元解像度から切り出す
+  /// （320 入力上のボトルは学習条件の長辺>=96px を満たせないことが多い）。
+  /// 検出時のみ・トラックごとに [_attrInterval] のレート制限つき。
+  Future<void> _updateTrackAttrs(List<Detection> dets) async {
+    try {
+      final int vw = _video.videoWidth;
+      final int vh = _video.videoHeight;
+      if (vw == 0 || vh == 0) return;
+      final double s = _detector.inputSize.toDouble();
+      final now = DateTime.now();
+      var updated = false;
+      // tracks はループ中に消えうるのでコピーを回す
+      for (final t in List<Track>.of(_tracker.tracks)) {
+        if (t.lastMatch == null) continue; // 見失い中の位置では推論しない
+        if (now.difference(t.lastAttrAt) < _attrInterval) continue;
+        // 学習時と同じ余白（cropRgba と同係数）を入力座標系で付ける
+        final double pad = t.rect.shortestSide * 0.15 + 2;
+        final r = ui.Rect.fromLTRB(
+          (t.rect.left - pad).clamp(0.0, s),
+          (t.rect.top - pad).clamp(0.0, s),
+          (t.rect.right + pad).clamp(0.0, s),
+          (t.rect.bottom + pad).clamp(0.0, s),
+        );
+        // 入力座標（フレーム全体の squash）→ 元フレーム座標
+        final double sx = r.left * vw / s;
+        final double sy = r.top * vh / s;
+        final double sw = r.width * vw / s;
+        final double sh = r.height * vh / s;
+        // 学習データの付与条件（元解像度で長辺 >= 96px）未満はスキップ
+        if (sw < 1 || sh < 1 ||
+            (sw < AttrClassifier.minCropSide &&
+                sh < AttrClassifier.minCropSide)) {
+          continue;
+        }
+        const int a = AttrClassifier.inputSize;
+        _attrCtx.drawImage(
+            _video, sx, sy, sw, sh, 0, 0, a.toDouble(), a.toDouble());
+        final data = _attrCtx.getImageData(0, 0, a, a).data.toDart;
+        final rgba = data.buffer
+            .asUint8List(data.offsetInBytes, data.lengthInBytes);
+        try {
+          t.attrs.add(await _attrCls.run(rgba));
+          // 検出器の cap/label パーツ有無はより強い証拠なので融合する。
+          // 「あり」は誤検出が少なく強め、「なし」は角度・遮蔽で見えない
+          // だけの可能性があるため弱めに効かせる。
+          final capDet = MultiTracker.partIn(t.rect, dets, 1);
+          final lblDet = MultiTracker.partIn(t.rect, dets, 2);
+          t.attrs.addObservation('cap', capDet != null ? 0 : 1,
+              alpha: capDet != null ? 0.35 : 0.15);
+          t.attrs.addObservation('label', lblDet != null ? 0 : 1,
+              alpha: lblDet != null ? 0.35 : 0.15);
+          t.lastAttrAt = DateTime.now();
+          _attrFails = 0;
+          updated = true;
+        } catch (e) {
+          _attrFails++;
+          debugPrint('attr inference failed ($_attrFails/$_maxAttrFails): $e');
+          return; // 次の検出サイクルで再試行（連続失敗でヒューズが切れる）
+        }
+      }
+      if (updated && !_disposed) setState(() {});
+    } catch (e) {
+      debugPrint('attr update failed: $e');
+    }
+  }
+
   /// [rgba]（入力フレーム）から [rect] を切り抜いて ui.Image 化する。
   Future<ui.Image?> _decodeCrop(Uint8List rgba, ui.Rect rect) async {
     final c = cropRgba(rgba, _detector.inputSize, rect);
@@ -532,6 +636,7 @@ class _CameraSegViewState extends State<CameraSegView> {
     }
     _stopStream();
     _detector.dispose();
+    _attrCls.dispose();
     super.dispose();
   }
 
@@ -577,6 +682,7 @@ class _CameraSegViewState extends State<CameraSegView> {
                       label: t.labelImg,
                       capColor: _palette[1],
                       labelColor: _palette[2],
+                      attrs: t.attrs.display(),
                     ),
                     const SizedBox(width: 10),
                   ],

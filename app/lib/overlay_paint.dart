@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'attr_classifier.dart';
+
 /// 検出オーバーレイ画像を、カメラプレビュー(object-fit: cover)と同じ変換で
 /// 画面に重ねる Painter（web / mobile 共用）。
 ///
@@ -132,6 +134,7 @@ class TrackPanel extends StatelessWidget {
     required this.label,
     required this.capColor,
     required this.labelColor,
+    this.attrs = const {},
   });
 
   final int trackId;
@@ -141,6 +144,10 @@ class TrackPanel extends StatelessWidget {
   final ui.Image? label;
   final Color capColor;
   final Color labelColor;
+
+  /// 属性分類器のトラック内集約結果（AttrAggregate.display()）。
+  /// 空なら属性行は表示しない（分類器未ロード/未推論）。
+  final Map<String, ({String value, double conf})> attrs;
 
   @override
   Widget build(BuildContext context) {
@@ -168,8 +175,55 @@ class TrackPanel extends StatelessWidget {
               _tile('label', label, labelColor),
             ],
           ),
+          if (attrs.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _attrGrid(),
+          ],
         ],
       ),
+    );
+  }
+
+  /// 10属性を 2 列のコンパクト表で出す。信頼度が閾値未満の値は '?' 表示。
+  Widget _attrGrid() {
+    Widget cell(
+        ({
+          String key,
+          String jp,
+          List<String> classes,
+          List<String> jpClasses
+        }) h) {
+      final a = attrs[h.key];
+      final bool ok = a != null &&
+          a.conf >= AttrAggregate.thresholdFor(h.classes.length);
+      final int idx = ok ? h.classes.indexOf(a.value) : -1;
+      final String value = idx >= 0 ? h.jpClasses[idx] : '?';
+      return SizedBox(
+        width: 77,
+        child: Text(
+          '${h.jp}: $value',
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: ok ? Colors.white : Colors.white38,
+            fontSize: 9,
+          ),
+        ),
+      );
+    }
+
+    const heads = AttrSchema.heads;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < heads.length; i += 2)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              cell(heads[i]),
+              if (i + 1 < heads.length) cell(heads[i + 1]),
+            ],
+          ),
+      ],
     );
   }
 

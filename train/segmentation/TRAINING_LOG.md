@@ -94,3 +94,47 @@ GPUS=8 bash run_train.sh visualizer.vis_backends.1.run_name=<run名>
 - [ ] さらなる高速化（必要なら）: ORT スレッド数/XNNPACK・NNAPI EP、入力 192、モデル量子化
 - [ ] 精度改善: CVAT 検品反映後の再学習 / rtmdet-ins_m / 高解像度入力 / epoch 増
 - [ ] APK スリム化: `flutter build apk --split-per-abi`（arm64 のみで ~70MB）
+
+## 8. ボトル属性分類器(2段目)の学習(2026-07-12、2×H100 ~15分)
+
+トラック中のボトルクロップに10属性(DATASET.md §5)を付与する軽量マルチヘッド分類器。
+教師は `_sam3full` の Qwen3-VL 疑似ラベル → **精度は「対疑似ラベル再現度」**。
+
+- 実装: [train_attr_cls.py](train_attr_cls.py)(`extract` でクロップ抽出→`train` で学習)。
+  クロップは bbox+15% pad・長辺>=96px のボトル 43,477個(train 38,029 / val 2,469 / test 2,979)を
+  ローカル抽出して転送(283MB。画像全体4GBを送らない)。
+- モデル: torchvision MobileNetV3(ImageNet事前学習) + 共有ネック512 + 属性別10ヘッド。
+  入力128×128(アスペクト潰し=ランタイム規約)、unknown は ignore_index、クラス重み sqrt逆頻度、
+  bf16 AMP、30 epoch、AdamW 3e-4 cosine。val 平均macro-F1 でベスト選択。
+- RunPod: [runpod/_attrcls_pod.py](runpod/_attrcls_pod.py) で 1 pod(H100×2)作成、
+  small/large を GPU 並列で同時学習。package→seed→smoke→本走→回収→term の全所要 ~30分。
+  ⚠️ Windows で作った tar は pod 側で `--no-same-owner` を付けて展開(chown エラー)。
+- 結果(test、対疑似ラベル):
+
+  | arch | mean macro-F1 | 強い属性 | 弱い属性 |
+  |---|---|---|---|
+  | mobilenet_v3_small(5MB/デプロイ用) | **0.681** | depiction .865 / label .845 / orientation .791 | fill_level .485 / material .522(glass/can混同+other僅少) |
+  | mobilenet_v3_large(14MB/参照) | **0.709** | 同傾向 | 同傾向 |
+
+- 成果物: `work_attr/<arch>/best.pth · metrics.json · history.json · attr_cls_*.onnx · onnx_meta.json`
+  (ONNX は検出器と同じ uint8 NHWC RGBA [1,128,128,4] 入力埋め込み、出力 logits [1,41]。
+  ORT 検算済み max diff ~5e-3)
+- 次: アプリ統合(トラック単位の非同期推論+時間集約)、fill_level/material の教師見直し
+
+### 8b. MobileNetV4 比較(2026-07-12、2×H100 ~15分)
+
+timm の V4 conv 系(hybrid は MQA 入りで量子化に不利なので除外)を同条件で学習して比較。
+timm の efficientnet 系は `num_classes=0` でも conv_head 込みの `head_hidden_size` 次元が
+出てくる(num_features ではない)点に注意。
+
+| arch | ONNX | test meanF1 |
+|---|---|---|
+| mobilenet_v3_small | 5.0MB | 0.681 |
+| mobilenetv4_conv_small | 12.7MB | 0.699 |
+| **mobilenet_v3_large** | **13.9MB** | **0.709** |
+| mobilenetv4_conv_medium | 36.4MB | 0.712 |
+
+**結論: 同サイズ帯では V3 が V4 に勝つか同等**(13-14MB 帯で v3_large 0.709 ≥ v4_conv_small 0.699、
+36MB の v4_conv_medium でも 0.712 と v3_large +0.4pt のみ)。128px 入力・この教師では V4 の優位は
+出なかった。**デプロイは v3_small(5MB)のまま**、精度を買うなら v3_large(13.9MB)が最有力。
+成果物は work_attr/ に4アーキ分。

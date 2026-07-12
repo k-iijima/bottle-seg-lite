@@ -23,13 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 学習済みモデル（fp32 + int8）は git 管理外なので最新リリースから取得する
+      # 学習済みモデル（fp32 + int8 + 属性分類器）は git 管理外なので最新リリースから取得する
       - name: Download trained models from Releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download --repo "$GITHUB_REPOSITORY" \
             --pattern 'rtmdet_ins*.onnx' --dir app/assets/models
+          # 属性分類器は任意（無くてもアプリは検出のみで動くため非致命）
+          gh release download --repo "$GITHUB_REPOSITORY" \
+            --pattern 'attr_cls.onnx' --dir app/assets/models \
+            || echo "::warning::attr_cls.onnx not found in release; attributes disabled"
 
       - uses: subosito/flutter-action@v2
         with:

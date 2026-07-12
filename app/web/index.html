@@ -39,6 +39,11 @@
     if (self.crossOriginIsolated && self.ort) {
       ort.env.wasm.numThreads = Math.min(8, navigator.hardwareConcurrency || 4);
     }
+    // EP 割当の warning（Some nodes were not assigned...）は既知・想定どおり
+    // なのでコンソールを汚さないよう error 以上のみ出す
+    if (self.ort) {
+      ort.env.logLevel = 'error';
+    }
   </script>
 </head>
 <body>

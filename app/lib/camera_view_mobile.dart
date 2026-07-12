@@ -7,6 +7,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'attr_classifier.dart';
 import 'detector.dart';
 import 'overlay_paint.dart';
 import 'tracking.dart';
@@ -55,6 +56,17 @@ class _CameraSegViewState extends State<CameraSegView> {
   // --- タップ追跡（複数ボトル+キャップ/ラベルの固定表示） ---
   final MultiTracker _tracker = MultiTracker();
 
+  // --- 属性分類器（2段目、トラック中のボトルのみ・低頻度） ---
+  final AttrClassifier _attrCls = AttrClassifier();
+
+  /// 連続失敗がこの回数に達したら属性推論を止める（成功でリセット）。
+  int _attrFails = 0;
+  static const int _maxAttrFails = 5;
+
+  /// トラックあたりの属性推論の最小間隔。属性はほぼ静的なので低頻度でよい
+  /// （検出が CPU 200-400ms/frame の機種を想定し、Web より長めにとる）。
+  static const Duration _attrInterval = Duration(milliseconds: 1000);
+
   static final List<Color> _palette = [
     for (final c in Detector.colors) Color.fromARGB(255, c[0], c[1], c[2]),
   ];
@@ -73,13 +85,20 @@ class _CameraSegViewState extends State<CameraSegView> {
       // ORT_INVALID_ARGUMENT になる）。起動時に必ず消して最新を展開させる。
       try {
         final dir = await getTemporaryDirectory();
-        final cached =
-            File('${dir.path}${Platform.pathSeparator}rtmdet_ins.onnx');
-        if (await cached.exists()) {
-          await cached.delete();
+        for (final name in ['rtmdet_ins.onnx', 'attr_cls.onnx']) {
+          final cached = File('${dir.path}${Platform.pathSeparator}$name');
+          if (await cached.exists()) {
+            await cached.delete();
+          }
         }
       } catch (_) {}
       await _detector.init();
+      // 属性分類器はオプショナル: 失敗しても検出は動かす
+      try {
+        await _attrCls.init();
+      } catch (e) {
+        debugPrint('attr classifier unavailable: $e');
+      }
     } catch (e) {
       _setStatus('Model load failed: $e');
       return;
@@ -161,6 +180,12 @@ class _CameraSegViewState extends State<CameraSegView> {
             t.labelImg = im;
           }
         }
+      }
+
+      // 属性推定は検出と直列に低頻度で回す（検出との CPU スレッド競合を
+      // 避ける。_running ガード内なので次フレームとも重ならない）
+      if (_attrCls.isReady && _tracker.active && _attrFails < _maxAttrFails) {
+        await _updateTrackAttrs(image, rotation, res.detections);
       }
 
       if (!_disposed) {
@@ -275,6 +300,138 @@ class _CameraSegViewState extends State<CameraSegView> {
     return completer.future;
   }
 
+  /// トラック中ボトルの属性を推定して EMA 集約に足し込む。
+  ///
+  /// クロップは 320 入力ではなくカメラの元解像度 YUV から直接切り出す
+  /// （320 入力上のボトルは学習条件の長辺>=96px を満たせないことが多い）。
+  /// 検出時のみ・トラックごとに [_attrInterval] のレート制限つき。
+  Future<void> _updateTrackAttrs(
+      CameraImage image, int rotation, List<Detection> dets) async {
+    try {
+      final bool swap = rotation == 90 || rotation == 270;
+      final int rw = swap ? image.height : image.width; // 回転補正後の幅/高さ
+      final int rh = swap ? image.width : image.height;
+      final double s = _detector.inputSize.toDouble();
+      final now = DateTime.now();
+      var updated = false;
+      for (final t in List<Track>.of(_tracker.tracks)) {
+        if (t.lastMatch == null) continue; // 見失い中の位置では推論しない
+        if (now.difference(t.lastAttrAt) < _attrInterval) continue;
+        // 学習時と同じ余白（cropRgba と同係数）を入力座標系で付ける
+        final double pad = t.rect.shortestSide * 0.15 + 2;
+        final r = ui.Rect.fromLTRB(
+          (t.rect.left - pad).clamp(0.0, s),
+          (t.rect.top - pad).clamp(0.0, s),
+          (t.rect.right + pad).clamp(0.0, s),
+          (t.rect.bottom + pad).clamp(0.0, s),
+        );
+        // 入力座標（フレーム全体の squash）→ 回転補正後フレーム座標
+        final crop = ui.Rect.fromLTRB(
+          r.left * rw / s,
+          r.top * rh / s,
+          r.right * rw / s,
+          r.bottom * rh / s,
+        );
+        // 学習データの付与条件（元解像度で長辺 >= 96px）未満はスキップ
+        if (crop.width < 1 ||
+            crop.height < 1 ||
+            (crop.width < AttrClassifier.minCropSide &&
+                crop.height < AttrClassifier.minCropSide)) {
+          continue;
+        }
+        final rgba =
+            _yuvCropToRgba(image, rotation, crop, AttrClassifier.inputSize);
+        try {
+          t.attrs.add(await _attrCls.run(rgba));
+          // 検出器の cap/label パーツ有無はより強い証拠なので融合する。
+          // 「あり」は誤検出が少なく強め、「なし」は角度・遮蔽で見えない
+          // だけの可能性があるため弱めに効かせる。
+          final capDet = MultiTracker.partIn(t.rect, dets, 1);
+          final lblDet = MultiTracker.partIn(t.rect, dets, 2);
+          t.attrs.addObservation('cap', capDet != null ? 0 : 1,
+              alpha: capDet != null ? 0.35 : 0.15);
+          t.attrs.addObservation('label', lblDet != null ? 0 : 1,
+              alpha: lblDet != null ? 0.35 : 0.15);
+          t.lastAttrAt = DateTime.now();
+          _attrFails = 0;
+          updated = true;
+        } catch (e) {
+          _attrFails++;
+          debugPrint('attr inference failed ($_attrFails/$_maxAttrFails): $e');
+          return; // 次の検出サイクルで再試行（連続失敗でヒューズが切れる）
+        }
+      }
+      if (updated && !_disposed) setState(() {});
+    } catch (e) {
+      debugPrint('attr update failed: $e');
+    }
+  }
+
+  /// YUV420 フレームから、回転補正後座標の [crop] 領域を [s]×[s] の RGBA に
+  /// 切り出す（アスペクトは潰す=学習時と同じ規約。ニアレストネイバー）。
+  Uint8List _yuvCropToRgba(
+      CameraImage image, int rotation, ui.Rect crop, int s) {
+    final int w = image.width;
+    final int h = image.height;
+    final yPlane = image.planes[0];
+    final uPlane = image.planes[1];
+    final vPlane = image.planes[2];
+    final int yStride = yPlane.bytesPerRow;
+    final int uvStride = uPlane.bytesPerRow;
+    final int uvPixStride = uPlane.bytesPerPixel ?? 1;
+
+    final bool swap = rotation == 90 || rotation == 270;
+    final int rw = swap ? h : w;
+    final int rh = swap ? w : h;
+
+    final out = Uint8List(s * s * 4);
+    for (int dy = 0; dy < s; dy++) {
+      final int ry =
+          (crop.top + (dy + 0.5) * crop.height / s).floor().clamp(0, rh - 1);
+      for (int dx = 0; dx < s; dx++) {
+        final int rx =
+            (crop.left + (dx + 0.5) * crop.width / s).floor().clamp(0, rw - 1);
+        int sx, sy;
+        switch (rotation) {
+          case 90:
+            sx = ry;
+            sy = h - 1 - rx;
+            break;
+          case 180:
+            sx = w - 1 - rx;
+            sy = h - 1 - ry;
+            break;
+          case 270:
+            sx = w - 1 - ry;
+            sy = rx;
+            break;
+          default:
+            sx = rx;
+            sy = ry;
+        }
+
+        final int yv = yPlane.bytes[sy * yStride + sx];
+        final int uvIndex = (sy >> 1) * uvStride + (sx >> 1) * uvPixStride;
+        final int u = uPlane.bytes[uvIndex] - 128;
+        final int v = vPlane.bytes[uvIndex] - 128;
+
+        int r = (yv + 1.402 * v).round();
+        int g = (yv - 0.344136 * u - 0.714136 * v).round();
+        int b = (yv + 1.772 * u).round();
+        r = r.clamp(0, 255);
+        g = g.clamp(0, 255);
+        b = b.clamp(0, 255);
+
+        final int o = (dy * s + dx) * 4;
+        out[o] = r;
+        out[o + 1] = g;
+        out[o + 2] = b;
+        out[o + 3] = 255;
+      }
+    }
+    return out;
+  }
+
   /// タップ: 追跡中ボトル→そのトラックを解除 / 未追跡ボトル→トラック追加 /
   /// ボトル以外→全トラック解除。
   void _onTapDown(Offset local, Size size) {
@@ -317,6 +474,7 @@ class _CameraSegViewState extends State<CameraSegView> {
     }
     _controller?.dispose();
     _detector.dispose();
+    _attrCls.dispose();
     super.dispose();
   }
 
@@ -371,6 +529,7 @@ class _CameraSegViewState extends State<CameraSegView> {
                       label: t.labelImg,
                       capColor: _palette[1],
                       labelColor: _palette[2],
+                      attrs: t.attrs.display(),
                     ),
                     const SizedBox(width: 10),
                   ],
