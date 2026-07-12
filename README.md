@@ -7,6 +7,10 @@
 **🌐 ライブデモ: https://k-iijima.github.io/bottle-seg-lite/** （カメラ許可が必要。
 main への push で GitHub Actions が自動ビルド・デプロイします）
 
+![デモ: ボトルの検出セグメンテーション・タップ追跡・10属性推定](showcase/demo.gif)
+
+フル画質版は [showcase/capture.mp4](showcase/capture.mp4)（720p 40秒 20MB）。
+
 - **映像をとめない**: カメラ映像はネイティブ層で再生され、Dart/Flutter とは独立して描画されます。
   推論は非同期ループで動き、前フレームの推論が終わるまで新しいフレームは**スキップ**されるため、
   プレビューがモデルを待つことはありません。
