@@ -47,10 +47,10 @@ class InferResult {
 ///   labels : int64   [1, K]
 ///   masks  : float32 [1, K, S, S]  インスタンスマスク（0..1）
 class Detector {
-  // scoreThreshold の下限は ONNX 側の内部閾値（export_rtmdet.sh の SCORE_THR=0.35）。
+  // scoreThreshold の下限は ONNX 側の内部閾値（export_rtmdet.sh の SCORE_THR=0.25）。
   // それ未満に下げたい場合は再エクスポートが必要。上げる分にはここだけでよい
-  // （0.40 は誤検知抑制のための実運用値）。
-  Detector({this.inputSize = 320, this.scoreThreshold = 0.40});
+  // （0.30 は cap/label の閾値またぎチラつき対策で 0.40 から緩和した実運用値）。
+  Detector({this.inputSize = 320, this.scoreThreshold = 0.30});
 
   /// モデル入力解像度（エクスポート時の SIZE と一致させること）。
   final int inputSize;
@@ -213,7 +213,17 @@ class Detector {
 
     final masks = r.masks;
     if (masks != null) {
-      for (final d in r.detections) {
+      // 先勝ち塗りのため、部位（cap/label）→ bottle の順で塗る。
+      // スコア順だとフレームごとに bottle と部位の優先が入れ替わり、
+      // 重なり領域の部位マスクが出たり消えたりして見える。
+      final order = List<Detection>.of(r.detections)
+        ..sort((a, b) {
+          final pa = a.cls == 0 ? 1 : 0;
+          final pb = b.cls == 0 ? 1 : 0;
+          final c = pa.compareTo(pb);
+          return c != 0 ? c : b.score.compareTo(a.score);
+        });
+      for (final d in order) {
         final color = colors[d.cls];
         final int mOff = d.srcIndex * plane;
         for (int p = 0; p < plane; p++) {
@@ -230,39 +240,6 @@ class Detector {
     }
     lastStageMs['ovl'] = sw.elapsedMilliseconds;
     return overlay;
-  }
-
-  /// 旧 API（mobile 用）: マスク+枠入りオーバーレイを一括生成する。
-  Future<Uint8List> run(Uint8List rgba) async {
-    final r = await runRaw(rgba);
-    final overlay = composeMasks(r);
-    final int s = r.inputSize;
-    for (final d in r.detections) {
-      _drawRect(overlay, s, d.rect.left.toInt(), d.rect.top.toInt(),
-          d.rect.right.toInt(), d.rect.bottom.toInt(), colors[d.cls]);
-    }
-    return overlay;
-  }
-
-  void _drawRect(
-      Uint8List img, int s, int x1, int y1, int x2, int y2, List<int> c) {
-    void px(int x, int y) {
-      if (x < 0 || y < 0 || x >= s || y >= s) return;
-      final int o = (y * s + x) * 4;
-      img[o] = c[0];
-      img[o + 1] = c[1];
-      img[o + 2] = c[2];
-      img[o + 3] = 255;
-    }
-
-    for (int x = x1; x <= x2; x++) {
-      px(x, y1);
-      px(x, y2);
-    }
-    for (int y = y1; y <= y2; y++) {
-      px(x1, y);
-      px(x2, y);
-    }
   }
 
   Future<void> dispose() async {

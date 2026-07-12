@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'detector.dart';
 import 'overlay_paint.dart';
+import 'tracking.dart';
 
 /// モバイル(Android/iOS)向け: camera プラグインのプレビューに RTMDet-Ins の
 /// 検出オーバーレイ（bottle=赤 / cap=青 / label=緑）を重ねる。
@@ -44,6 +45,19 @@ class _CameraSegViewState extends State<CameraSegView> {
 
   /// ステージ別所要時間の表示文字列（ボトルネック特定用、Web 版と同形式）。
   String _timing = '';
+
+  /// 検出枠（入力px座標のベクタ描画。trackId 付きはハイライト）。
+  List<({ui.Rect rect, int cls, int? trackId})> _boxes = const [];
+
+  /// 直近フレームの検出リスト（タップ選択用）。
+  List<Detection> _lastDets = const [];
+
+  // --- タップ追跡（複数ボトル+キャップ/ラベルの固定表示） ---
+  final MultiTracker _tracker = MultiTracker();
+
+  static final List<Color> _palette = [
+    for (final c in Detector.colors) Color.fromARGB(255, c[0], c[1], c[2]),
+  ];
 
   @override
   void initState() {
@@ -113,7 +127,8 @@ class _CameraSegViewState extends State<CameraSegView> {
       final double aspect = swap
           ? image.height / image.width
           : image.width / image.height;
-      final overlay = await _detector.run(rgba);
+      final res = await _detector.runRaw(rgba);
+      final overlay = _detector.composeMasks(res);
       sw.reset();
       final img = await _decodeMask(overlay, _detector.inputSize);
       final decMs = sw.elapsedMilliseconds;
@@ -122,6 +137,32 @@ class _CameraSegViewState extends State<CameraSegView> {
       final timing = 'yuv $yuvMs · ten ${st['ten']} · run ${st['run']}'
           ' · dets ${st['dets']} · masks ${st['masks']}'
           ' · ovl ${st['ovl']} · dec $decMs';
+
+      // タップ追跡の更新と、トラックごとの部位（キャップ/ラベル）切り抜き
+      for (final t in _tracker.update(res.detections)) {
+        t.disposeImages(); // ロストで破棄されたトラック
+      }
+      final ids = Map<Detection, int>.identity();
+      for (final t in _tracker.tracks) {
+        if (t.lastMatch != null) ids[t.lastMatch!] = t.id;
+        final cap = MultiTracker.partIn(t.rect, res.detections, 1);
+        final lbl = MultiTracker.partIn(t.rect, res.detections, 2);
+        if (cap != null) {
+          final im = await _decodeCrop(rgba, cap.rect);
+          if (im != null) {
+            t.capImg?.dispose();
+            t.capImg = im;
+          }
+        }
+        if (lbl != null) {
+          final im = await _decodeCrop(rgba, lbl.rect);
+          if (im != null) {
+            t.labelImg?.dispose();
+            t.labelImg = im;
+          }
+        }
+      }
+
       if (!_disposed) {
         _mask?.dispose();
         final c = _detector.lastCounts;
@@ -138,6 +179,15 @@ class _CameraSegViewState extends State<CameraSegView> {
           _frameAspect = aspect;
           _lastInferMs = ms;
           _timing = timing;
+          _lastDets = res.detections;
+          _boxes = [
+            for (final d in res.detections)
+              (
+                rect: d.rect,
+                cls: d.cls,
+                trackId: ids[d],
+              ),
+          ];
           _status = 'bottle:${c[0]} cap:${c[1]} label:${c[2]}';
         });
       } else {
@@ -225,6 +275,34 @@ class _CameraSegViewState extends State<CameraSegView> {
     return completer.future;
   }
 
+  /// タップ: 追跡中ボトル→そのトラックを解除 / 未追跡ボトル→トラック追加 /
+  /// ボトル以外→全トラック解除。
+  void _onTapDown(Offset local, Size size) {
+    final p = MaskPainter.screenToInput(
+        local, size, _frameAspect, _detector.inputSize);
+    setState(() {
+      final hit = _tracker.trackAt(p);
+      if (hit != null) {
+        _tracker.remove(hit);
+        hit.disposeImages();
+      } else if (!_tracker.addAt(p, _lastDets)) {
+        for (final t in _tracker.clear()) {
+          t.disposeImages();
+        }
+      }
+    });
+  }
+
+  /// [rgba]（入力フレーム）から [rect] を切り抜いて ui.Image 化する。
+  Future<ui.Image?> _decodeCrop(Uint8List rgba, ui.Rect rect) async {
+    final c = cropRgba(rgba, _detector.inputSize, rect);
+    if (c == null) return null;
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+        c.rgba, c.width, c.height, ui.PixelFormat.rgba8888, completer.complete);
+    return completer.future;
+  }
+
   void _setStatus(String s) {
     if (_disposed) return;
     setState(() => _status = s);
@@ -234,6 +312,9 @@ class _CameraSegViewState extends State<CameraSegView> {
   void dispose() {
     _disposed = true;
     _mask?.dispose();
+    for (final t in _tracker.clear()) {
+      t.disposeImages();
+    }
     _controller?.dispose();
     _detector.dispose();
     super.dispose();
@@ -259,7 +340,42 @@ class _CameraSegViewState extends State<CameraSegView> {
         if (_mask != null)
           Positioned.fill(
             child: CustomPaint(
-              painter: MaskPainter(_mask!, srcAspect: _frameAspect),
+              painter: MaskPainter(_mask!,
+                  srcAspect: _frameAspect, boxes: _boxes, palette: _palette),
+            ),
+          ),
+        // タップでボトルを追跡選択
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, c) => GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapDown: (d) => _onTapDown(d.localPosition, c.biggest),
+            ),
+          ),
+        ),
+        if (_tracker.active)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (final t in _tracker.tracks) ...[
+                    TrackPanel(
+                      trackId: t.id,
+                      cap: t.capImg,
+                      label: t.labelImg,
+                      capColor: _palette[1],
+                      labelColor: _palette[2],
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                ],
+              ),
             ),
           ),
         Positioned(

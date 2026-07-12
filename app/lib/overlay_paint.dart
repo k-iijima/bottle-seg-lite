@@ -17,8 +17,8 @@ class MaskPainter extends CustomPainter {
   final double srcAspect;
 
   /// マスク画像と同じピクセル座標系のボックス（Web: 検出間は外挿で更新される）。
-  /// モバイルはオーバーレイに焼き込むため空。
-  final List<({Rect rect, int cls})> boxes;
+  /// trackId 付きのボックスは白の太枠+ID チップでハイライトする。
+  final List<({Rect rect, int cls, int? trackId})> boxes;
   final List<Color> palette;
 
   @override
@@ -43,21 +43,61 @@ class MaskPainter extends CustomPainter {
     // マスクと同じ srcPx→dst 変換でボックスを描く
     final double kx = dst.width / srcPx.width;
     final double ky = dst.height / srcPx.height;
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    final stroke = Paint()..style = PaintingStyle.stroke;
     for (final b in boxes) {
-      stroke.color = b.cls < palette.length ? palette[b.cls] : Colors.white;
-      canvas.drawRect(
-        Rect.fromLTRB(
-          (b.rect.left - srcPx.left) * kx,
-          (b.rect.top - srcPx.top) * ky,
-          (b.rect.right - srcPx.left) * kx,
-          (b.rect.bottom - srcPx.top) * ky,
-        ),
-        stroke,
+      final r = Rect.fromLTRB(
+        (b.rect.left - srcPx.left) * kx,
+        (b.rect.top - srcPx.top) * ky,
+        (b.rect.right - srcPx.left) * kx,
+        (b.rect.bottom - srcPx.top) * ky,
       );
+      final color = b.cls < palette.length ? palette[b.cls] : Colors.white;
+      if (b.trackId != null) {
+        stroke
+          ..color = Colors.white
+          ..strokeWidth = 5;
+        canvas.drawRect(r, stroke);
+      }
+      stroke
+        ..color = color
+        ..strokeWidth = b.trackId != null ? 2.5 : 2;
+      canvas.drawRect(r, stroke);
+
+      if (b.trackId != null) {
+        // トラック ID チップ（枠の左上。画面上端では枠内に落とす）
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '#${b.trackId}',
+            style: const TextStyle(
+                color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        const double padX = 5;
+        final double chipH = tp.height + 4;
+        final double top = r.top >= chipH ? r.top - chipH : r.top;
+        final chip = Rect.fromLTWH(r.left, top, tp.width + padX * 2, chipH);
+        canvas.drawRect(chip, Paint()..color = color);
+        tp.paint(canvas, Offset(chip.left + padX, chip.top + 2));
+      }
     }
+  }
+
+  /// 画面座標 [p] を、paint と同じ cover 変換の逆写像で
+  /// オーバーレイ入力ピクセル座標に変換する（タップ選択用）。
+  static Offset screenToInput(
+      Offset p, Size size, double srcAspect, int inputSize) {
+    final dst = Offset.zero & size;
+    final logical = Rect.fromLTWH(0, 0, srcAspect, 1);
+    final crop = coverSrcRect(logical, dst);
+    final sx = inputSize / srcAspect;
+    final sy = inputSize.toDouble();
+    final srcPx = Rect.fromLTWH(
+        crop.left * sx, crop.top * sy, crop.width * sx, crop.height * sy);
+    return Offset(
+      srcPx.left + p.dx / dst.width * srcPx.width,
+      srcPx.top + p.dy / dst.height * srcPx.height,
+    );
   }
 
   /// src を dst のアスペクト比に合わせて中央クロップする。
@@ -81,6 +121,84 @@ class MaskPainter extends CustomPainter {
       oldDelegate.mask != mask ||
       oldDelegate.srcAspect != srcAspect ||
       oldDelegate.boxes != boxes;
+}
+
+/// 追跡中トラック 1 件分のパネル（#ID ヘッダ+cap/label の切り抜きタイル）。
+class TrackPanel extends StatelessWidget {
+  const TrackPanel({
+    super.key,
+    required this.trackId,
+    required this.cap,
+    required this.label,
+    required this.capColor,
+    required this.labelColor,
+  });
+
+  final int trackId;
+
+  /// 切り抜き画像（未検出時は null で「—」表示）。
+  final ui.Image? cap;
+  final ui.Image? label;
+  final Color capColor;
+  final Color labelColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white70, width: 1.5),
+      ),
+      padding: const EdgeInsets.all(6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('#$trackId',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _tile('cap', cap, capColor),
+              const SizedBox(width: 6),
+              _tile('label', label, labelColor),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tile(String title, ui.Image? image, Color color) {
+    return Container(
+      width: 74,
+      height: 92,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color, width: 2),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Column(
+        children: [
+          Expanded(
+            child: image != null
+                ? RawImage(image: image, fit: BoxFit.contain)
+                : const Center(
+                    child: Text('—',
+                        style: TextStyle(color: Colors.white38, fontSize: 18)),
+                  ),
+          ),
+          const SizedBox(height: 2),
+          Text(title,
+              style: const TextStyle(color: Colors.white, fontSize: 10)),
+        ],
+      ),
+    );
+  }
 }
 
 class StatusChip extends StatelessWidget {

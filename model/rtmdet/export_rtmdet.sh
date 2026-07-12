@@ -6,8 +6,8 @@
 # 検証: mmdeploy の deploy.py が torch と onnxruntime の出力可視化を /out/verify/ に保存する。
 set -e
 
-SIZE=${SIZE:-256}                 # モバイル向け入力解像度（正方）
-SCORE_THR=${SCORE_THR:-0.35}
+SIZE=${SIZE:-320}                 # 入力解像度（正方）。app の Detector(inputSize:) と一致させる
+SCORE_THR=${SCORE_THR:-0.25}      # モデル内部の足切り。app 側閾値(0.30)より低くしておく
 TOPK=${TOPK:-10}                  # モバイルでは masks 出力 [1,K,S,S] が支配的コスト → 小さく
 CKPT=${CKPT:-/train/work_pet_bottle/best_coco_segm_mAP_epoch_60.pth}
 MODEL_CFG=/train/mmdet_configs/rtmdet-ins_s_pet_bottle.py

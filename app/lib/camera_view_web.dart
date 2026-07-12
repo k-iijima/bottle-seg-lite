@@ -10,6 +10,7 @@ import 'package:web/web.dart' as web;
 
 import 'detector.dart';
 import 'overlay_paint.dart';
+import 'tracking.dart';
 
 /// Web 向け: ネイティブ <video> のプレビューに RTMDet-Ins の検出オーバーレイを
 /// 重ねる（onnxruntime-web / wasm）。プレビューはプラットフォームビューなので
@@ -125,8 +126,14 @@ class _CameraSegViewState extends State<CameraSegView> {
   DateTime? _prevAt;
   DateTime? _curAt;
   List<ui.Offset> _curVel = const []; // px/ms（_curDets と同順）
-  List<({ui.Rect rect, int cls})> _boxes = const [];
+  List<({ui.Rect rect, int cls, int? trackId})> _boxes = const [];
   Timer? _boxTimer;
+
+  // --- タップ追跡（複数ボトル+キャップ/ラベルの固定表示） ---
+  final MultiTracker _tracker = MultiTracker();
+
+  /// 直近フレームの検出→トラック ID の対応（ハイライト/ID チップ用）。
+  Map<Detection, int> _detTrackIds = Map.identity();
 
   /// 外挿の上限。これを超えて検出が来ない場合は最後の位置で止める
   /// （行き過ぎた予測で枠が飛んでいくのを防ぐ）。
@@ -311,7 +318,7 @@ class _CameraSegViewState extends State<CameraSegView> {
           // パイプライン化: マスク合成・デコード・描画は待たずに
           // 次フレームの推論に進む（_present 内は取得済みデータのみ使う
           // ため、セッション切替とも競合しない）
-          unawaited(_present(res, started, grabMs));
+          unawaited(_present(res, rgba, started, grabMs));
         } catch (e) {
           // フレーム破棄でループ継続（原因はステータスに表示して可視化）
           _setStatus('ERR: ${e.toString().substring(0, e.toString().length.clamp(0, 120))}');
@@ -324,7 +331,8 @@ class _CameraSegViewState extends State<CameraSegView> {
   }
 
   /// 推論結果の合成・デコード・状態更新（次の推論と並行して走る）。
-  Future<void> _present(InferResult res, DateTime started, int grabMs) async {
+  Future<void> _present(
+      InferResult res, Uint8List rgba, DateTime started, int grabMs) async {
     final int seq = ++_presentSeq;
     try {
       final st = Map<String, int>.of(_detector.lastStageMs);
@@ -333,10 +341,40 @@ class _CameraSegViewState extends State<CameraSegView> {
       final sw = Stopwatch()..start();
       final img = await _decodeMask(overlay, _detector.inputSize);
       final decMs = sw.elapsedMilliseconds;
+
       if (_disposed || seq != _presentSeq) {
         img.dispose(); // 追い越された古い結果は捨てる
         return;
       }
+
+      // タップ追跡の更新と、トラックごとの部位（キャップ/ラベル）切り抜き
+      for (final t in _tracker.update(res.detections)) {
+        t.disposeImages(); // ロストで破棄されたトラック
+      }
+      final ids = Map<Detection, int>.identity();
+      for (final t in _tracker.tracks) {
+        if (t.lastMatch != null) ids[t.lastMatch!] = t.id;
+        final cap = MultiTracker.partIn(t.rect, res.detections, 1);
+        final lbl = MultiTracker.partIn(t.rect, res.detections, 2);
+        // 新しい切り抜きが取れたフレームだけ差し替える
+        // （一時的に部位検出が切れてもパネルは最後の画像を保持）
+        if (cap != null) {
+          final im = await _decodeCrop(rgba, cap.rect);
+          if (im != null) {
+            t.capImg?.dispose();
+            t.capImg = im;
+          }
+        }
+        if (lbl != null) {
+          final im = await _decodeCrop(rgba, lbl.rect);
+          if (im != null) {
+            t.labelImg?.dispose();
+            t.labelImg = im;
+          }
+        }
+      }
+      _detTrackIds = ids;
+
       final now = DateTime.now();
       _prevDets = _curDets;
       _prevAt = _curAt;
@@ -416,15 +454,46 @@ class _CameraSegViewState extends State<CameraSegView> {
         .inMilliseconds
         .clamp(0, _maxExtrapolateMs)
         .toDouble();
-    final boxes = <({ui.Rect rect, int cls})>[
+    final boxes = <({ui.Rect rect, int cls, int? trackId})>[
       for (var i = 0; i < _curDets.length; i++)
         (
           rect: _curDets[i].rect.shift(
               (i < _curVel.length ? _curVel[i] : ui.Offset.zero) * dt),
           cls: _curDets[i].cls,
+          trackId: _detTrackIds[_curDets[i]],
         ),
     ];
     setState(() => _boxes = boxes);
+  }
+
+  /// タップ: 追跡中ボトル→そのトラックを解除 / 未追跡ボトル→トラック追加 /
+  /// ボトル以外→全トラック解除。
+  void _onTapDown(Offset local, Size size) {
+    final p = MaskPainter.screenToInput(
+        local, size, _frameAspect, _detector.inputSize);
+    setState(() {
+      final hit = _tracker.trackAt(p);
+      if (hit != null) {
+        _tracker.remove(hit);
+        hit.disposeImages();
+      } else if (!_tracker.addAt(p, _curDets)) {
+        for (final t in _tracker.clear()) {
+          t.disposeImages();
+        }
+        _detTrackIds = Map.identity();
+      }
+    });
+    _tickBoxes();
+  }
+
+  /// [rgba]（入力フレーム）から [rect] を切り抜いて ui.Image 化する。
+  Future<ui.Image?> _decodeCrop(Uint8List rgba, ui.Rect rect) async {
+    final c = cropRgba(rgba, _detector.inputSize, rect);
+    if (c == null) return null;
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+        c.rgba, c.width, c.height, ui.PixelFormat.rgba8888, completer.complete);
+    return completer.future;
   }
 
   Uint8List _grabFrame() {
@@ -458,6 +527,9 @@ class _CameraSegViewState extends State<CameraSegView> {
     _disposed = true;
     _boxTimer?.cancel();
     _mask?.dispose();
+    for (final t in _tracker.clear()) {
+      t.disposeImages();
+    }
     _stopStream();
     _detector.dispose();
     super.dispose();
@@ -475,6 +547,41 @@ class _CameraSegViewState extends State<CameraSegView> {
             child: CustomPaint(
               painter: MaskPainter(_mask!,
                   srcAspect: _frameAspect, boxes: _boxes, palette: _palette),
+            ),
+          ),
+        // タップでボトルを追跡選択（プラットフォームビューより上に置いて
+        // ポインタイベントを受ける。ボタン類はさらに上のレイヤで優先される）
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, c) => GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapDown: (d) => _onTapDown(d.localPosition, c.biggest),
+            ),
+          ),
+        ),
+        if (_tracker.active)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 16,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (final t in _tracker.tracks) ...[
+                    TrackPanel(
+                      trackId: t.id,
+                      cap: t.capImg,
+                      label: t.labelImg,
+                      capColor: _palette[1],
+                      labelColor: _palette[2],
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                ],
+              ),
             ),
           ),
         Positioned(
