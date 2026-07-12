@@ -51,7 +51,13 @@ android {
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")
         implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-        implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.22.0'
+        // LOCAL PATCH: 1.22.0 -> 1.27.0（Web の ort-web と同一バージョンに揃える）。
+        // QNN 同梱版 (onnxruntime-android-qnn) も試したが、SM8550 実機で
+        // HTP は QNN_DEVICE_ERROR_INVALID_CONFIG（OEM の cDSP 制限疑い）、
+        // GPU バックエンドはプラットフォームエラーで全滅だったため、
+        // APK +130MB を避けて通常版に戻した（QNN を試す場合はここを
+        // onnxruntime-android-qnn に差し替え、detector.dart で QNN を指定）。
+        implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.27.0'
     }
 
     testOptions {

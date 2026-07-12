@@ -118,11 +118,13 @@ class Detector {
       );
       _session = await ort.createSession('assets/$modelAsset', options: options);
     } else {
-      // Android: CPU EP（4 スレッド）。
-      // NNAPI / XNNPACK はこのモデル（uint8 NHWC 入力+NMS 以降の動的 shape）
-      // でセッション作成中に SIGABRT する（実機 Snapdragon で確認、
-      // クラッシュ位置は両者同一= XNNPACK EP 由来）。NPU/加速が必要なら
-      // QNN EP か tflite 変換を別途検討。
+      // Android: CPU EP（4 スレッド）。ハードウェアアクセラレーションは
+      // 全ルート検証済みで現状使えない（SM8550/Xperia 実機・ORT 1.22/1.27）:
+      //   NNAPI / XNNPACK … セッション作成中に SIGABRT（モデルとの組合せバグ）
+      //   QNN HTP(NPU)    … デバイス作成が INVALID_CONFIG（OEM の cDSP 制限疑い）
+      //   QNN GPU(Adreno) … バックエンド初期化がプラットフォームエラー
+      // 残る手段は NMS をグラフから外す再エクスポート+Dart 後処理か
+      // TFLite 変換（いずれも中〜大工事）。
       final options = OrtSessionOptions(
         providers: [OrtProvider.CPU],
         intraOpNumThreads: 4,

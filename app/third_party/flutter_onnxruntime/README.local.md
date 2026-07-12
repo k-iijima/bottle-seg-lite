@@ -19,6 +19,11 @@ Web 実装の Dart⇔JS TypedArray 変換が 1 要素ずつの interop 呼び出
 
 int64（labels、要素数が少ない）と bool/string は元実装のまま。
 
+## パッチ内容（android/build.gradle）
+
+- `onnxruntime-android` 1.22.0 → 1.27.0（Web の ort-web と同一バージョン。
+  1.22 は XNNPACK EP が本プロジェクトのモデルでセッション作成中に SIGABRT）
+
 ## パッチ内容（android/.../FlutterOnnxruntimePlugin.kt）
 
 - `NNAPI`: `addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))` — fp16 実行を許可

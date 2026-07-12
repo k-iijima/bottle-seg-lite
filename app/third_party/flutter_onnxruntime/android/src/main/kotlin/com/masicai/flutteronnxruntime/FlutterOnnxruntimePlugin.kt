@@ -252,11 +252,11 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     for (provider in providers) {
                         // add providers with default parameters
                         when (provider) {
-                            "ACL" -> {
-                                ortSessionOptions.addACL(true)
-                            }
-                            "ARM_NN" -> {
-                                ortSessionOptions.addArmNN(useArena)
+                            // LOCAL PATCH: ACL / ArmNN EP は ORT 1.27 の Java API から
+                            // 削除されたため非対応にする（addACL/addArmNN が存在しない）
+                            "ACL", "ARM_NN" -> {
+                                result.error("INVALID_PROVIDER", "Provider $provider was removed in ONNX Runtime 1.27", null)
+                                return
                             }
                             "CORE_ML" -> {
                                 ortSessionOptions.addCoreML()
@@ -274,15 +274,21 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 ortSessionOptions.addDnnl(useArena)
                             }
                             "NNAPI" -> {
-                                // LOCAL PATCH: fp16 実行を許可（GPU/NPU の実効速度が
-                                // 大きく向上。精度低下は fp16 丸め程度）
-                                ortSessionOptions.addNnapi(java.util.EnumSet.of(NNAPIFlags.USE_FP16))
+                                // LOCAL PATCH: USE_FP16 フラグはクラッシュ切り分けのため
+                                // いったん外している（素の addNnapi で検証中）
+                                ortSessionOptions.addNnapi()
                             }
                             "OPEN_VINO" -> {
                                 ortSessionOptions.addOpenVINO(deviceId.toString())
                             }
                             "QNN" -> {
-                                ortSessionOptions.addQnn(mapOf())
+                                // LOCAL PATCH: Adreno GPU バックエンドを使う。
+                                // HTP（Hexagon NPU）は SM8550 実機で device 作成が
+                                // QNN_DEVICE_ERROR_INVALID_CONFIG になり使えなかった
+                                // （htp_arch=73 指定でも同じ。OEM の cDSP 制限の疑い）。
+                                ortSessionOptions.addQnn(mapOf(
+                                    "backend_path" to "libQnnGpu.so",
+                                ))
                             }
                             "ROCM" -> {
                                 ortSessionOptions.addROCM(deviceId)

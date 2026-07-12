@@ -61,6 +61,15 @@ def embed(model: onnx.ModelProto) -> onnx.ModelProto:
     ]
     for i, n in enumerate(pp_nodes):
         g.node.insert(i, n)
+
+    # mmdeploy は動的な出力次元を dim_value=0 で宣言する（dets [1,0,5] 等）。
+    # サイズ 0 の静的テンソルと解釈され、NNAPI 等の EP パーティショナが
+    # セッション作成中に abort する原因になるため、シンボリック次元に直す。
+    for out in g.output:
+        for i, d in enumerate(out.type.tensor_type.shape.dim):
+            if d.dim_value == 0 and not d.dim_param:
+                d.Clear()
+                d.dim_param = f"{out.name}_dyn{i}"
     return model
 
 
