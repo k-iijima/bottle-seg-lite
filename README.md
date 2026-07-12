@@ -60,7 +60,7 @@ Qwen3-VL による bottle 属性10種）の作成と、RTMDet-Ins-s の学習（
 | `best_coco_segm_mAP_epoch_60.pth` | `train/segmentation/work_pet_bottle/` に置くと `make rtmdet-onnx` で再エクスポート可能 |
 
 ```bash
-gh release download v0.1.0 -R k-iijima/bottle-seg-lite -p rtmdet_ins.onnx -O app/assets/models/rtmdet_ins.onnx
+gh release download v0.2.0 -R k-iijima/bottle-seg-lite -p rtmdet_ins.onnx -O app/assets/models/rtmdet_ins.onnx
 ```
 
 ## 必要なもの
