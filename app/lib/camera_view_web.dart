@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:ui_web' as ui_web;
@@ -36,13 +37,52 @@ class _CameraSegViewState extends State<CameraSegView> {
   String? _currentCameraId;
 
   /// モデル×実行方式の切替候補（GPU=WebGPU 優先・非対応時は wasm に自動フォールバック）。
+  /// int8×GPU は ort-web の WebGPU が per-channel DequantizeLinear 未対応で
+  /// 推論実行時にカーネルエラーになるため提供しない（int8 は CPU 専用）。
   static const List<({String label, String asset, bool gpu})> _inferConfigs = [
     (label: 'fp32 / GPU', asset: Detector.fp32Asset, gpu: true),
     (label: 'fp32 / CPU', asset: Detector.fp32Asset, gpu: false),
-    (label: 'int8 / GPU', asset: Detector.int8Asset, gpu: true),
     (label: 'int8 / CPU', asset: Detector.int8Asset, gpu: false),
   ];
   int _configIndex = 0;
+
+  /// WebGPU アダプタが実際に取得できたか（指定してもフォールバックされうるため、
+  /// requestAdapter で確認した結果を表示に使う）。
+  bool _webGpuOk = false;
+
+  /// 実際に動いているモードの表示用ラベル（例: fp32/GPU, int8/CPU×8）。
+  String get _modeLabel {
+    final c = _inferConfigs[_configIndex];
+    final model = c.asset == Detector.int8Asset ? 'int8' : 'fp32';
+    if (c.gpu && _webGpuOk) return '$model/GPU';
+    final t = _wasmThreads;
+    final cpu = 'CPU${t > 1 ? '×$t' : ''}';
+    return c.gpu ? '$model/GPU→$cpu' : '$model/$cpu';
+  }
+
+  /// ort-web の wasm スレッド数（crossOriginIsolated でなければ 1）。
+  int get _wasmThreads {
+    if (!web.window.crossOriginIsolated) return 1;
+    final ort = (web.window as JSObject).getProperty('ort'.toJS) as JSObject?;
+    final env = ort?.getProperty('env'.toJS) as JSObject?;
+    final wasm = env?.getProperty('wasm'.toJS) as JSObject?;
+    final n = wasm?.getProperty('numThreads'.toJS);
+    return n.isA<JSNumber>() ? (n! as JSNumber).toDartInt : 1;
+  }
+
+  Future<void> _probeWebGpu() async {
+    try {
+      final gpu =
+          (web.window.navigator as JSObject).getProperty('gpu'.toJS) as JSObject?;
+      if (gpu == null) return;
+      final adapter = await (gpu.callMethod('requestAdapter'.toJS)
+              as JSPromise<JSAny?>)
+          .toDart;
+      _webGpuOk = adapter != null;
+    } catch (_) {
+      _webGpuOk = false;
+    }
+  }
 
   /// 前回選んだカメラを次回も使うための localStorage キー。
   /// ブラウザ既定が仮想カメラ等で黒映像になる環境への対策。
@@ -99,6 +139,8 @@ class _CameraSegViewState extends State<CameraSegView> {
       _setStatus('Camera error: $e');
       return;
     }
+
+    await _probeWebGpu();
 
     try {
       _setStatus('Loading model…');
@@ -297,7 +339,11 @@ class _CameraSegViewState extends State<CameraSegView> {
         Positioned(
           left: 12,
           top: 12,
-          child: StatusChip(status: _status, inferMs: _lastInferMs, fps: _fps),
+          child: StatusChip(
+              mode: _modeLabel,
+              status: _status,
+              inferMs: _lastInferMs,
+              fps: _fps),
         ),
         Positioned(
           right: 12,

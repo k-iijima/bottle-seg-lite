@@ -57,15 +57,23 @@ class MaskPainter extends CustomPainter {
 
 class StatusChip extends StatelessWidget {
   const StatusChip(
-      {super.key, required this.status, this.inferMs = 0, this.fps = 0});
+      {super.key,
+      required this.status,
+      this.mode,
+      this.inferMs = 0,
+      this.fps = 0});
 
   final String status;
+
+  /// 実行中のモード表示（例: fp32/GPU）。null なら省略（mobile など）。
+  final String? mode;
   final int inferMs;
   final double fps;
 
   @override
   Widget build(BuildContext context) {
     final parts = [
+      if (mode != null) mode!,
       status,
       if (inferMs > 0) '${inferMs}ms',
       if (fps > 0) '${fps.toStringAsFixed(1)}fps',
