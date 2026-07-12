@@ -34,11 +34,22 @@ codebase_config = dict(post_processing=dict(
 EOF
 
 mkdir -p /out/verify
+# 可視化ステップは CUDA テンソル→CPU 版 onnxruntime の io_binding 非対応で
+# 失敗することがあるが、変換 (end2end.onnx) はその前に完了している。
+# 出力検証は下の embed_preprocess.py --check（fp32 前処理との出力一致）で行う。
 python /opt/mmdeploy/tools/deploy.py \
   /tmp/deploy_cfg.py "$MODEL_CFG" "$CKPT" "$DEMO_IMG" \
-  --work-dir /out/verify --device cuda --dump-info
+  --work-dir /out/verify --device cuda --dump-info \
+  || echo "[export] WARN: deploy.py visualize failed (non-fatal)"
+test -f /out/verify/end2end.onnx
 
 cp /out/verify/end2end.onnx /out/rtmdet_ins.onnx
+
+# 前処理（RGBA→BGR・正規化）をグラフに埋め込み、入力を uint8 RGBA NHWC にする。
+# アプリ側は canvas / カメラの RGBA バッファをそのまま渡せる（per-pixel 変換不要）。
+python /work/embed_preprocess.py /out/rtmdet_ins.onnx /out/rtmdet_ins.onnx \
+  --check "$DEMO_IMG"
+
 python - <<'PY'
 import onnx, os
 m = onnx.load('/out/rtmdet_ins.onnx')

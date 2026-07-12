@@ -27,13 +27,14 @@ services:
       - hf_cache:/hf_cache
     working_dir: /work
 
-  # Flutter web dev server. Open http://localhost:8080 after it starts.
+  # Flutter web dev server. Open http://localhost:8081 after it starts.
+  # (ホスト側 8080 は WSL の code-server が wslrelay で占有しているため 8081 を使う)
   web:
     build:
       context: ./app
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8081:8080"
     volumes:
       - ./app:/app
       - pub_cache:/root/.pub-cache

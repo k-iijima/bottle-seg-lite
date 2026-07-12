@@ -24,7 +24,7 @@ class CameraSegView extends StatefulWidget {
 class _CameraSegViewState extends State<CameraSegView> {
   static const String _viewType = 'camera-video-view';
 
-  final Detector _detector = Detector(inputSize: 416);
+  final Detector _detector = Detector(inputSize: 320);
   double _frameAspect = 1.0;
 
   late final web.HTMLVideoElement _video;
@@ -97,6 +97,9 @@ class _CameraSegViewState extends State<CameraSegView> {
   double _fps = 0;
   DateTime _lastDone = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// ステージ別所要時間の表示文字列（ボトルネック特定用）。
+  String _timing = '';
+
   @override
   void initState() {
     super.initState();
@@ -108,7 +111,11 @@ class _CameraSegViewState extends State<CameraSegView> {
     _grabCanvas = web.HTMLCanvasElement()
       ..width = s
       ..height = s;
-    _grabCtx = _grabCanvas.getContext('2d') as web.CanvasRenderingContext2D;
+    // getImageData を毎フレーム呼ぶため readback 最適化を指定
+    _grabCtx = _grabCanvas.getContext(
+      '2d',
+      {'willReadFrequently': true}.jsify(),
+    ) as web.CanvasRenderingContext2D;
 
     _video = web.HTMLVideoElement()
       ..autoplay = true
@@ -252,10 +259,18 @@ class _CameraSegViewState extends State<CameraSegView> {
         _running = true;
         try {
           final started = DateTime.now();
+          final sw = Stopwatch()..start();
           final rgba = _grabFrame();
+          final grabMs = sw.elapsedMilliseconds;
           final overlay = await _detector.run(rgba);
+          sw.reset();
           final img = await _decodeMask(overlay, _detector.inputSize);
+          final decMs = sw.elapsedMilliseconds;
           final ms = DateTime.now().difference(started).inMilliseconds;
+          final st = _detector.lastStageMs;
+          final timing = 'grab $grabMs · ten ${st['ten']}'
+              ' · run ${st['run']} · dets ${st['dets']}'
+              ' · masks ${st['masks']} · ovl ${st['ovl']} · dec $decMs';
           if (!_disposed) {
             _mask?.dispose();
             final c = _detector.lastCounts;
@@ -272,6 +287,7 @@ class _CameraSegViewState extends State<CameraSegView> {
                   ? _video.videoWidth / _video.videoHeight
                   : 1.0;
               _lastInferMs = ms;
+              _timing = timing;
               _status = 'bottle:${c[0]} cap:${c[1]} label:${c[2]}';
             });
           } else {
@@ -343,7 +359,8 @@ class _CameraSegViewState extends State<CameraSegView> {
               mode: _modeLabel,
               status: _status,
               inferMs: _lastInferMs,
-              fps: _fps),
+              fps: _fps,
+              detail: _timing),
         ),
         Positioned(
           right: 12,

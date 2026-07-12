@@ -61,7 +61,8 @@ class StatusChip extends StatelessWidget {
       required this.status,
       this.mode,
       this.inferMs = 0,
-      this.fps = 0});
+      this.fps = 0,
+      this.detail});
 
   final String status;
 
@@ -69,6 +70,9 @@ class StatusChip extends StatelessWidget {
   final String? mode;
   final int inferMs;
   final double fps;
+
+  /// ステージ別タイミング等の補足行。null / 空なら省略。
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -84,9 +88,20 @@ class StatusChip extends StatelessWidget {
         color: Colors.black54,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        parts.join('  •  '),
-        style: const TextStyle(color: Colors.white, fontSize: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            parts.join('  •  '),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+          if (detail != null && detail!.isNotEmpty)
+            Text(
+              detail!,
+              style: const TextStyle(color: Colors.white70, fontSize: 10),
+            ),
+        ],
       ),
     );
   }

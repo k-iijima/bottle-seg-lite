@@ -6,14 +6,15 @@ import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 /// RTMDet-Ins (mmdeploy export) を実行し、インスタンスマスク+枠の RGBA
 /// オーバーレイを生成する。
 ///
-/// I/O 契約（model/rtmdet/export_rtmdet.sh で SIZE=320 エクスポート）:
-///   input  : float32 [1, 3, S, S]  NCHW、**BGR** 順・mean/std 正規化
-///            (mean = 103.53, 116.28, 123.675 / std = 57.375, 57.12, 58.395)
+/// I/O 契約（model/rtmdet/export_rtmdet.sh で SIZE=320 エクスポート、
+/// embed_preprocess.py で前処理をグラフに埋め込み済み）:
+///   input  : uint8   [1, S, S, 4]  NHWC RGBA そのまま（canvas getImageData /
+///            カメラフレーム直渡し。BGR 変換・mean/std 正規化はモデル内蔵）
 ///   dets   : float32 [1, K, 5]  (x1, y1, x2, y2, score) 入力解像度スケール
 ///   labels : int64   [1, K]
 ///   masks  : float32 [1, K, S, S]  インスタンスマスク（0..1）
 class Detector {
-  // scoreThreshold の下限は ONNX 側の内部閾値（export_rtmdet.sh の SCORE_THR=0.25）。
+  // scoreThreshold の下限は ONNX 側の内部閾値（export_rtmdet.sh の SCORE_THR=0.35）。
   // それ未満に下げたい場合は再エクスポートが必要。上げる分にはここだけでよい
   // （0.40 は誤検知抑制のための実運用値）。
   Detector({this.inputSize = 320, this.scoreThreshold = 0.40});
@@ -27,10 +28,6 @@ class Detector {
   static const String int8Asset = 'assets/models/rtmdet_ins_int8.onnx';
 
   static const String _inputName = 'input';
-
-  // RTMDet の data_preprocessor と同値（BGR 順、bgr_to_rgb=False）。
-  static const List<double> _meanBgr = [103.53, 116.28, 123.675];
-  static const List<double> _stdBgr = [57.375, 57.12, 58.395];
 
   static const int _fillAlpha = 110;
   // クラス色: bottle / cap / label
@@ -46,6 +43,11 @@ class Detector {
 
   /// 直近フレームの検出数（クラス別）。UI 表示用。
   List<int> lastCounts = [0, 0, 0];
+
+  /// 直近 run() のステージ別所要時間 [ms]。ボトルネック特定用。
+  /// ten=入力テンソル生成 / run=session.run /
+  /// dets=dets+labels 転送 / masks=masks 転送 / ovl=オーバーレイ合成
+  final Map<String, int> lastStageMs = <String, int>{};
 
   /// 検出数がこれを超えるフレームはマスク転送をスキップして枠のみ描画する
   /// （masks テンソルの platform channel 転送が支配的コストのため）。
@@ -89,26 +91,23 @@ class Detector {
     final int s = inputSize;
     final int plane = s * s;
 
-    // --- 前処理: RGBA(HWC) -> BGR float NCHW 正規化 ---
-    final input = Float32List(3 * plane);
-    for (int p = 0; p < plane; p++) {
-      final int base = p * 4;
-      final double r = rgba[base].toDouble();
-      final double g = rgba[base + 1].toDouble();
-      final double b = rgba[base + 2].toDouble();
-      input[p] = (b - _meanBgr[0]) / _stdBgr[0]; // ch0 = B
-      input[plane + p] = (g - _meanBgr[1]) / _stdBgr[1]; // ch1 = G
-      input[2 * plane + p] = (r - _meanBgr[2]) / _stdBgr[2]; // ch2 = R
-    }
+    final sw = Stopwatch()..start();
 
-    final inputTensor = await OrtValue.fromList(input, [1, 3, s, s]);
+    // 前処理（RGBA→BGR・正規化）はモデル内蔵。RGBA バッファを直渡しする。
+    final inputTensor = await OrtValue.fromList(rgba, [1, s, s, 4]);
+    lastStageMs['ten'] = sw.elapsedMilliseconds;
     Map<String, OrtValue>? outputs;
     try {
+      sw.reset();
       outputs = await session.run({_inputName: inputTensor});
+      lastStageMs['run'] = sw.elapsedMilliseconds;
+
+      sw.reset();
       final dets =
           (await outputs['dets']!.asFlattenedList()).cast<num>();
       final labels =
           (await outputs['labels']!.asFlattenedList()).cast<num>();
+      lastStageMs['dets'] = sw.elapsedMilliseconds;
 
       final int k = labels.length;
       // 閾値を超える検出（スコア降順で並んでいる）
@@ -121,11 +120,14 @@ class Detector {
       }
 
       // 密集シーンではマスク転送（支配的コスト）をスキップし枠のみ描画
+      sw.reset();
       List<num>? masks;
       if (accepted.length <= _maskFetchLimit) {
         masks = (await outputs['masks']!.asFlattenedList()).cast<num>();
       }
+      lastStageMs['masks'] = sw.elapsedMilliseconds;
 
+      sw.reset();
       final overlay = Uint8List(plane * 4); // 透明で初期化
       final counts = [0, 0, 0];
 
@@ -154,6 +156,7 @@ class Detector {
         final int y2 = dets[i * 5 + 3].toDouble().clamp(0, s - 1).toInt();
         _drawRect(overlay, s, x1, y1, x2, y2, color);
       }
+      lastStageMs['ovl'] = sw.elapsedMilliseconds;
       lastCounts = counts;
       return overlay;
     } finally {

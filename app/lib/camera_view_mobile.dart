@@ -24,7 +24,7 @@ class CameraSegView extends StatefulWidget {
 }
 
 class _CameraSegViewState extends State<CameraSegView> {
-  final Detector _detector = Detector(inputSize: 416);
+  final Detector _detector = Detector(inputSize: 320);
 
   /// 推論の最小間隔（発熱・GC 圧の抑制）。
   static const Duration _minInterval = Duration(milliseconds: 150);

@@ -14,17 +14,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-# detector.dart / export_rtmdet.sh と同一の前処理（BGR 順・mean/std 正規化・squash リサイズ）
-MEAN_BGR = np.array([103.53, 116.28, 123.675], dtype=np.float32)
-STD_BGR = np.array([57.375, 57.12, 58.395], dtype=np.float32)
-
-
+# モデル入力は uint8 RGBA NHWC（前処理は embed_preprocess.py でグラフに内蔵済み）。
+# アプリと同じ squash リサイズだけ行う。
 def preprocess(path: Path, size: int) -> np.ndarray:
-    img = Image.open(path).convert("RGB").resize((size, size), Image.BILINEAR)
-    rgb = np.asarray(img, dtype=np.float32)
-    bgr = rgb[:, :, ::-1]
-    x = (bgr - MEAN_BGR) / STD_BGR
-    return x.transpose(2, 0, 1)[None]  # NCHW
+    img = Image.open(path).convert("RGBA").resize((size, size), Image.BILINEAR)
+    return np.asarray(img, dtype=np.uint8)[None]  # NHWC [1,S,S,4]
 
 
 class ImageCalibReader:
@@ -57,7 +51,7 @@ def main():
     ap.add_argument("--calib-dir",
                     default="train/segmentation/datasets/bottle/images/all")
     ap.add_argument("--num", type=int, default=128)
-    ap.add_argument("--size", type=int, default=416)
+    ap.add_argument("--size", type=int, default=320)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
