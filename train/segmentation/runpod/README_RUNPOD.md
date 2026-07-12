@@ -77,6 +77,37 @@ scp -i runpod/.rp/id_rsa -P <PORT> root@<IP>:/workspace/train_outputs.tar.gz run
 
 ---
 
+## 0c. 属性分類器の学習（2026-07-12 実施、1 pod × 2 GPU で計 ~15分）
+
+`_sam3full` の属性疑似ラベルから 10 属性のマルチヘッド分類器
+（[../train_attr_cls.py](../train_attr_cls.py)）を学習する。クロップは**ローカルで抽出**して
+227MB だけ転送する（画像全体 4GB を送らない）。
+
+```bash
+# 1) ローカル: クロップ抽出（43,477個 / 283MB）→ パッケージ
+python train_attr_cls.py extract --data-root datasets/bottle
+bash runpod/package_attrcls_inputs.sh
+# 2) pod 作成（H100×2）→ 転送 → セットアップ
+python runpod/_attrcls_pod.py create 2      # ssh 接続情報が表示される
+scp -i runpod/.rp/id_rsa -P <PORT> runpod/attrcls_inputs.tar root@<IP>:/workspace/
+ssh  -i runpod/.rp/id_rsa -p <PORT> root@<IP> \
+  "cd /workspace && tar xf attrcls_inputs.tar --no-same-owner && bash runpod/setup_attrcls.sh"
+# 3) スモーク → 本走（ARCHS を GPU に振り分けて並列学習）
+ssh ... "cd /workspace && bash runpod/run_attrcls.sh --smoke"
+ssh ... "cd /workspace && nohup bash runpod/run_attrcls.sh > run.log 2>&1 &"
+# 4) 回収 → pod 削除（★課金）
+scp -i runpod/.rp/id_rsa -P <PORT> root@<IP>:/workspace/attrcls_outputs.tar.gz runpod/
+python runpod/_attrcls_pod.py term
+```
+
+- 結果（test、対 Qwen3-VL 疑似ラベル）: v3_small 0.681 / v4_conv_small 0.699 /
+  **v3_large 0.709** / v4_conv_medium 0.712 → 同サイズ帯では V3 ≥ V4。
+  デプロイは v3_small（5MB）。詳細は [../TRAINING_LOG.md](../TRAINING_LOG.md) §8/§8b
+- ⚠️ Windows で作った tar は `--no-same-owner` を付けて展開（chown エラー）
+- 成果物の ONNX は `app/assets/models/attr_cls.onnx` に配置（Releases v0.3.0 にも同梱）
+
+---
+
 # （既存）属性自動付与（material + cap/label）
 
 > ⚠️ **歴史的手順**（実行済み・通常は再実行不要）。当時は9属性・`_sam3attr` 出力だったが、
